@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Trip Splitter (CD / CQ)</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#fff; --text:#111; --muted:rgba(0,0,0,.62);
+      --border:#dfe3ee; --line:#eef1f8; --radius:14px; --pad:14px;
+      --accent:#111;
+    }
+    *{ -webkit-tap-highlight-color:transparent; }
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:var(--bg); color:var(--text);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    header{
+      padding:14px 16px;
+      background:#111; color:#fff;
+      position:sticky; top:0; z-index:5;
+      padding-top: calc(14px + env(safe-area-inset-top));
+    }
+    header h1{ margin:0; font-size:16px; }
+    header p{ margin:6px 0 0; opacity:.85; font-size:12px; }
+
+    .wrap{ max-width:1100px; margin:0 auto; padding:12px; display:grid; gap:12px; }
+    .grid{ display:grid; gap:12px; grid-template-columns:1fr; }
+    @media (min-width:980px){ .grid{ grid-template-columns:1.25fr .75fr; } }
+
+    .card{
+      background:var(--card);
+      border-radius:var(--radius);
+      padding:var(--pad);
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
+    }
+    h2{ margin:0 0 10px; font-size:15px; }
+    .muted{ font-size:12px; color:var(--muted); }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:var(--muted); }
+
+    label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+    input, select, textarea{
+      width:100%;
+      box-sizing:border-box;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-size:16px; /* avoid iOS zoom */
+      color: var(--text);
+    }
+    textarea{ resize:vertical; min-height:44px; }
+
+    button{
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--accent);
+      color:#fff;
+      cursor:pointer;
+      font-weight:800;
+      font-size:15px;
+      min-height:44px;
+    }
+    button.secondary{ background:#fff; color:#111; }
+    button.danger{ background:#c62828; border-color:#c62828; }
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+
+    .hr{ height:1px; background:var(--line); margin:12px 0; }
+
+    .chips{ display:flex; flex-wrap:wrap; gap:10px; }
+    .chip{
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:10px 12px;
+      cursor:pointer;
+      user-select:none;
+      font-size:14px;
+      background:#fff;
+      color:#111;
+      min-height:40px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .chip.active{ background:#111; color:#fff; border-color:#111; }
+
+    .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .row3{ display:grid; grid-template-columns:1fr; gap:10px; }
+    @media (min-width:720px){ .row3{ grid-template-columns:1fr 1fr 1fr; } }
+
+    .twoBtns{ display:flex; gap:10px; flex-wrap:wrap; }
+    @media (max-width:560px){ .twoBtns button{ flex:1; } }
+
+    .tableWrap{
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#fff;
+    }
+    table{ width:100%; border-collapse:collapse; min-width:560px; }
+    th, td{
+      text-align:left;
+      font-size:13px;
+      padding:10px 8px;
+      border-bottom:1px solid var(--line);
+      vertical-align:top;
+    }
+    th{ font-size:12px; color:var(--muted); background:#fafbff; }
+    .right{ text-align:right; }
+
+    .pill{ font-size:12px; padding:4px 8px; border-radius:999px; background:#f1f3fa; display:inline-block; }
+
+    /* Category pills (CRITICAL FIX: force visible text colors) */
+    .catbar{ display:flex; flex-wrap:wrap; gap:8px; }
+    .catbtn{
+      padding:10px 12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      color:#111 !important; /* ensure not inherited as white */
+      cursor:pointer;
+      font-weight:900;
+      font-size:13px;
+      min-height:40px;
+      line-height:1;
+    }
+    .catbtn.active{
+      background:#111;
+      border-color:#111;
+      color:#fff !important;
+    }
+
+    .hintBox{
+      border:1px solid var(--line);
+      background:#fbfcff;
+      padding:10px 12px;
+      border-radius:12px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Trip Splitter — Chengdu / Chongqing</h1>
+  <p>Exact cents • SGD→CNY conversion • Daily breakdown • Save/Load</p>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="card">
+      <h2>1) Trip setup</h2>
+
+      <div class="row2">
+        <div>
+          <label>Trip name</label>
+          <input id="tripName" placeholder="e.g. CD + CQ Trip 2026" />
+        </div>
+        <div>
+          <label>Trip start date</label>
+          <input id="tripDate" type="date" />
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="row2">
+        <div>
+          <label>I am</label>
+          <select id="meSelect"></select>
+          <div class="muted" style="margin-top:6px;">Used as default “Paid by”.</div>
+        </div>
+        <div>
+          <label>SGD → CNY exchange rate</label>
+          <input id="fxRate" inputmode="decimal" placeholder="e.g. 5.00" />
+          <div class="muted" style="margin-top:6px;">Used to convert SGD expenses into CNY for totals/settlement.</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <label>People going for this trip</label>
+      <div class="hintBox">
+        <div class="muted">Fixed group for this trip:</div>
+        <div id="peopleChips" class="chips" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>2) Add an expense</h2>
+
+      <label>Category</label>
+      <div id="catBar" class="catbar"></div>
+      <div class="muted" style="margin-top:8px;">Tap category → fill details → choose who it’s for → Add expense.</div>
+
+      <div class="hr"></div>
+
+      <div class="row3">
+        <div>
+          <label>Paid by</label>
+          <select id="paidBy"></select>
+        </div>
+
+        <div>
+          <label>Amount</label>
+          <input id="amount" inputmode="decimal" placeholder="0.00" />
+          <div class="muted" style="margin-top:6px;">
+            Stored as exact cents (fen if CNY).
+          </div>
+        </div>
+
+        <div>
+          <label>Currency</label>
+          <select id="amountCcy">
+            <option value="CNY">CNY (¥)</option>
+            <option value="SGD">SGD ($)</option>
+          </select>
+          <div class="muted" style="margin-top:6px;">
+            Totals are shown in CNY (converted if SGD).
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <label>Date/Time (optional)</label>
+        <input id="expenseDT" type="datetime-local" />
+        <div class="muted" style="margin-top:6px;">
+          If blank, today’s date will be used for “Daily breakdown”.
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <label>Description (optional)</label>
+        <textarea id="desc" placeholder="e.g. Didi from hotel to Hongyadong"></textarea>
+      </div>
+
+      <div class="hr"></div>
+
+      <div>
+        <div class="muted" style="margin-bottom:6px;">Who is this expense for? (tap to select beneficiaries)</div>
+        <div id="beneficiaryChips" class="chips"></div>
+        <div class="muted" style="margin-top:8px;">
+          Shared with yourself? Just select your own name too.
+        </div>
+      </div>
+
+      <div class="twoBtns" style="margin-top:12px;">
+        <button id="addExpenseBtn">Add expense</button>
+        <button id="clearExpenseBtn" class="secondary">Clear</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>3) All expenses in this trip</h2>
+      <div class="tableWrap">
+        <table id="expenseTable"></table>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="twoBtns">
+        <button id="saveTripBtn">Save trip</button>
+        <button id="newTripBtn" class="secondary">New trip</button>
+        <button id="deleteTripBtn" class="danger" disabled>Delete loaded trip</button>
+      </div>
+      <p class="muted">
+        Saved locally (IndexedDB). GitHub Pages hosts the app, but your data stays on your device.
+        Use Export/Import JSON if you want to sync with friends.
+      </p>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+      <h2>Results (CNY)</h2>
+      <div class="muted">Net: positive = should receive, negative = should pay</div>
+      <div class="tableWrap">
+        <table id="netTable"></table>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Minimal settlement (CNY)</h2>
+      <div class="muted">Fewer payments to settle the whole trip.</div>
+      <div class="tableWrap">
+        <table id="settleTable"></table>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Daily breakdown</h2>
+      <div class="muted">Pick a date to see what needs splitting that day.</div>
+
+      <div class="row2" style="margin-top:10px;">
+        <div>
+          <label>Date</label>
+          <select id="daySelect"></select>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:10px;">
+          <button id="todayBtn" class="secondary" style="width:100%;">Today</button>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="muted" style="margin-bottom:8px;">Totals by category (selected day)</div>
+      <div class="tableWrap">
+        <table id="dayCatTable"></table>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="muted" style="margin-bottom:8px;">Expenses list (selected day)</div>
+      <div class="tableWrap">
+        <table id="dayListTable"></table>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>History (local)</h2>
+      <div class="row2">
+        <div>
+          <label>Load a saved trip</label>
+          <select id="historySelect"></select>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:10px;">
+          <button id="loadTripBtn" class="secondary" style="width:100%;">Load</button>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Backup / Sync</h2>
+      <div class="twoBtns">
+        <button id="exportBtn" class="secondary">Export JSON</button>
+        <button id="importBtn" class="secondary">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none;" />
+      </div>
+
+      <div class="hr"></div>
+
+      <h2>Sanity check</h2>
+      <div id="sanity" class="mono"></div>
+      <div id="dbStatus" class="mono" style="margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ------------------------
+  // Helpers
+  // ------------------------
+  function parseMoneyToMinor(raw) {
+    // "24.30" -> 2430 (cents/fen)
+    const s = String(raw ?? "").trim();
+    if (!s) return null;
+    const cleaned = s.replace(/[^\d.]/g,"");
+    if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return null;
+    const [a,b=""] = cleaned.split(".");
+    return Number(a)*100 + Number((b+"00").slice(0,2));
+  }
+
+  function minorToStr(minor, ccy) {
+    const sign = minor < 0 ? "-" : "";
+    const abs = Math.abs(minor);
+    const d = Math.floor(abs/100);
+    const r = abs%100;
+    const sym = (ccy === "CNY") ? "¥" : "$";
+    return `${sign}${sym}${d}.${String(r).padStart(2,"0")}`;
+  }
+
+  function getFxRate() {
+    // SGD -> CNY
+    const v = String($("fxRate").value || "").trim();
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
+  }
+
+  function sgdCentsToCnyFen(sgdCents, fxRate) {
+    // Convert SGD cents to CNY fen (round to nearest fen)
+    // SGD dollars = sgdCents / 100
+    // CNY = SGD * fxRate
+    // fen = CNY * 100
+    const fen = Math.round((sgdCents / 100) * fxRate * 100);
+    return fen;
+  }
+
+  function splitEvenMinor(totalMinor, namesSorted) {
+    const n = namesSorted.length;
+    const base = Math.floor(totalMinor / n);
+    const rem = totalMinor % n;
+    const m = new Map();
+    namesSorted.forEach((name, idx) => m.set(name, base + (idx < rem ? 1 : 0)));
+    return m;
+  }
+
+  function computeSettlement(net) {
+    const creditors=[], debtors=[];
+    for (const [name, v] of Object.entries(net)) {
+      if (v > 0) creditors.push([name, v]);
+      else if (v < 0) debtors.push([name, -v]);
+    }
+    creditors.sort((a,b)=>b[1]-a[1]);
+    debtors.sort((a,b)=>b[1]-a[1]);
+
+    const tx=[];
+    let i=0,j=0;
+    while (i<debtors.length && j<creditors.length) {
+      const [dn, da] = debtors[i];
+      const [cn, ca] = creditors[j];
+      const pay = Math.min(da, ca);
+      if (pay > 0) tx.push({from: dn, to: cn, minor: pay});
+      debtors[i][1] = da - pay;
+      creditors[j][1] = ca - pay;
+      if (debtors[i][1] === 0) i++;
+      if (creditors[j][1] === 0) j++;
+    }
+    return tx;
+  }
+
+  function isoDateFromDTLocal(dtLocal) {
+    // dtLocal like "2026-02-08T21:30" -> "2026-02-08"
+    if (!dtLocal) return null;
+    const m = /^(\d{4}-\d{2}-\d{2})T/.exec(dtLocal);
+    return m ? m[1] : null;
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0,10);
+  }
+
+  // ------------------------
+  // IndexedDB
+  // ------------------------
+  const DB_NAME="trip_splitter_db_v2";
+  const DB_VERSION=1;
+  const STORE="trips";
+  let db=null;
+
+  function openDB(){
+    return new Promise((resolve,reject)=>{
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e)=>{
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains(STORE)){
+          const st = d.createObjectStore(STORE, {keyPath:"id"});
+          st.createIndex("byDate","date");
+        }
+      };
+      req.onsuccess = ()=>resolve(req.result);
+      req.onerror = ()=>reject(req.error);
+    });
+  }
+  function dbPut(trip){
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).put(trip);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    });
+  }
+  function dbGetAll(){
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE,"readonly");
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess=()=>resolve(req.result||[]);
+      req.onerror=()=>reject(req.error);
+    });
+  }
+  function dbGet(id){
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE,"readonly");
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess=()=>resolve(req.result||null);
+      req.onerror=()=>reject(req.error);
+    });
+  }
+  function dbDelete(id){
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    });
+  }
+
+  // ------------------------
+  // State (fixed group)
+  // ------------------------
+  const PEOPLE = ["Ken","RY","CT","Dex","Chelle","Cas"];
+  const CATEGORIES = ["Didi","Meituan","Food","Hotels","Bookings","Baoche","Attractions","Shopping","General","Other"];
+
+  // expense:
+  // {
+  //   id, category, paidBy,
+  //   original: {ccy:"CNY"/"SGD", minor},  // minor is fen if CNY, cents if SGD
+  //   cnyFen,  // converted and stored in fen for all totals
+  //   desc, dtLocal, dayISO, beneficiaries:[]
+  // }
+  let currentTripId = null;
+  let me = "Dex";
+  let selectedCategory = "General";
+  let beneficiarySet = new Set();
+  let expenses = [];
+
+  // ------------------------
+  // Rendering
+  // ------------------------
+  function renderPeople(){
+    const el = $("peopleChips");
+    el.innerHTML="";
+    PEOPLE.forEach(name=>{
+      const chip = document.createElement("div");
+      chip.className = "chip active"; // fixed group always on
+      chip.textContent = name;
+      chip.style.cursor = "default";
+      el.appendChild(chip);
+    });
+  }
+
+  function renderMeSelect(){
+    const sel = $("meSelect");
+    sel.innerHTML="";
+    PEOPLE.forEach(n=>{
+      const opt=document.createElement("option");
+      opt.value=n; opt.textContent=n;
+      sel.appendChild(opt);
+    });
+    sel.value = PEOPLE.includes(me) ? me : "Dex";
+  }
+
+  function renderPaidBy(){
+    const sel = $("paidBy");
+    const cur = sel.value || me;
+    sel.innerHTML="";
+    PEOPLE.forEach(n=>{
+      const opt=document.createElement("option");
+      opt.value=n; opt.textContent=n;
+      sel.appendChild(opt);
+    });
+    sel.value = PEOPLE.includes(cur) ? cur : me;
+  }
+
+  function renderCategories(){
+    const bar = $("catBar");
+    bar.innerHTML="";
+    CATEGORIES.forEach(cat=>{
+      const btn = document.createElement("button");
+      btn.type="button";
+      btn.className = "catbtn" + (cat===selectedCategory ? " active" : "");
+      btn.textContent = cat; // now visible because catbtn has color:#111
+      btn.onclick=()=>{
+        selectedCategory = cat;
+        renderCategories();
+      };
+      bar.appendChild(btn);
+    });
+  }
+
+  function renderBeneficiaries(){
+    const wrap = $("beneficiaryChips");
+    wrap.innerHTML="";
+    PEOPLE.forEach(name=>{
+      const chip=document.createElement("div");
+      chip.className = "chip" + (beneficiarySet.has(name) ? " active" : "");
+      chip.textContent=name;
+      chip.onclick=()=>{
+        if (beneficiarySet.has(name)) beneficiarySet.delete(name);
+        else beneficiarySet.add(name);
+        renderBeneficiaries();
+      };
+      wrap.appendChild(chip);
+    });
+  }
+
+  function renderExpenseTable(){
+    const t = $("expenseTable");
+    if (!expenses.length){
+      t.innerHTML = "<tr><td class='muted'>No expenses yet</td></tr>";
+      return;
+    }
+    t.innerHTML = `
+      <tr>
+        <th>Date</th><th>Cat</th><th>Paid by</th><th>For</th>
+        <th class="right">Original</th><th class="right">CNY</th><th>Desc</th><th></th>
+      </tr>
+    `;
+    // newest first
+    [...expenses].slice().reverse().forEach(e=>{
+      const tr=document.createElement("tr");
+      const forList = e.beneficiaries.join(", ");
+      tr.innerHTML = `
+        <td>${e.dayISO || "-"}</td>
+        <td><span class="pill">${e.category}</span></td>
+        <td>${e.paidBy}</td>
+        <td><span class="muted">${forList}</span></td>
+        <td class="right">${minorToStr(e.original.minor, e.original.ccy)}</td>
+        <td class="right">${minorToStr(e.cnyFen, "CNY")}</td>
+        <td class="muted">${(e.desc||"").slice(0,70)}</td>
+        <td class="right"><button class="secondary">Del</button></td>
+      `;
+      tr.querySelector("button").onclick=()=>{
+        expenses = expenses.filter(x=>x.id!==e.id);
+        renderExpenseTable();
+        recalcAll();
+        refreshDaySelect();
+        renderDaily();
+      };
+      t.appendChild(tr);
+    });
+  }
+
+  function renderNetTable(net){
+    const t = $("netTable");
+    const list = Object.entries(net).sort((a,b)=>b[1]-a[1]);
+    if (!list.length){
+      t.innerHTML="<tr><td class='muted'>Add expenses to see results</td></tr>";
+      return;
+    }
+    t.innerHTML = `<tr><th>Name</th><th class="right">Net (CNY)</th></tr>`;
+    list.forEach(([name, v])=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML = `<td>${name}</td><td class="right">${minorToStr(v,"CNY")}</td>`;
+      t.appendChild(tr);
+    });
+  }
+
+  function renderSettlementTable(tx){
+    const t = $("settleTable");
+    if (!tx.length){
+      t.innerHTML="<tr><td class='muted'>No settlement needed (or no expenses)</td></tr>";
+      return;
+    }
+    t.innerHTML = `<tr><th>Payer</th><th>Receiver</th><th class="right">Amount (CNY)</th></tr>`;
+    tx.forEach(x=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML = `<td>${x.from}</td><td>${x.to}</td><td class="right">${minorToStr(x.minor,"CNY")}</td>`;
+      t.appendChild(tr);
+    });
+  }
+
+  // ------------------------
+  // Core math (CNY fen base)
+  // ------------------------
+  function recalcAll(){
+    const net = {};
+    PEOPLE.forEach(n=>net[n]=0);
+
+    for (const e of expenses){
+      // payer paid full
+      net[e.paidBy] += e.cnyFen;
+
+      // split among beneficiaries only
+      const group = e.beneficiaries.slice().sort();
+      if (!group.length) continue;
+
+      const shares = splitEvenMinor(e.cnyFen, group);
+      for (const name of group){
+        net[name] -= shares.get(name);
+      }
+    }
+
+    renderNetTable(net);
+    renderSettlementTable(computeSettlement(net));
+
+    const sum = Object.values(net).reduce((a,b)=>a+b,0);
+    const fx = getFxRate();
+    const fxText = fx ? ` • FX SGD→CNY: ${fx}` : ` • FX missing!`;
+    $("sanity").textContent = `Net sum (should be ¥0.00): ${minorToStr(sum,"CNY")} • People: ${PEOPLE.length} • Expenses: ${expenses.length}${fxText}`;
+  }
+
+  // ------------------------
+  // Daily breakdown
+  // ------------------------
+  function expenseDay(e){
+    return e.dayISO || todayISO();
+  }
+
+  function getAllDaysSorted(){
+    const set = new Set();
+    expenses.forEach(e=>set.add(expenseDay(e)));
+    const arr = [...set].sort();
+    return arr;
+  }
+
+  function refreshDaySelect(){
+    const sel = $("daySelect");
+    const current = sel.value;
+    const days = getAllDaysSorted();
+
+    sel.innerHTML="";
+    if (!days.length){
+      const opt=document.createElement("option");
+      opt.value=""; opt.textContent="(no expenses yet)";
+      sel.appendChild(opt);
+      return;
+    }
+    days.forEach(d=>{
+      const opt=document.createElement("option");
+      opt.value=d; opt.textContent=d;
+      sel.appendChild(opt);
+    });
+
+    if (days.includes(current)) sel.value=current;
+    else sel.value = days[days.length-1]; // latest
+  }
+
+  function renderDaily(){
+    const day = $("daySelect").value;
+    const catT = $("dayCatTable");
+    const listT = $("dayListTable");
+
+    if (!day){
+      catT.innerHTML = "<tr><td class='muted'>No data</td></tr>";
+      listT.innerHTML = "<tr><td class='muted'>No data</td></tr>";
+      return;
+    }
+
+    const dayItems = expenses.filter(e=>expenseDay(e)===day);
+
+    // Totals by category (CNY fen)
+    const catMap = {};
+    let dayTotal = 0;
+    dayItems.forEach(e=>{
+      catMap[e.category] = (catMap[e.category] || 0) + e.cnyFen;
+      dayTotal += e.cnyFen;
+    });
+
+    const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+    catT.innerHTML = `<tr><th>Category</th><th class="right">Total (CNY)</th></tr>`;
+    cats.forEach(([cat, v])=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML = `<td>${cat}</td><td class="right">${minorToStr(v,"CNY")}</td>`;
+      catT.appendChild(tr);
+    });
+    const trTotal=document.createElement("tr");
+    trTotal.innerHTML = `<td style="font-weight:900;">TOTAL</td><td class="right" style="font-weight:900;">${minorToStr(dayTotal,"CNY")}</td>`;
+    catT.appendChild(trTotal);
+
+    // List
+    if (!dayItems.length){
+      listT.innerHTML = "<tr><td class='muted'>No expenses for this day</td></tr>";
+      return;
+    }
+    listT.innerHTML = `
+      <tr>
+        <th>Cat</th><th>Paid by</th><th>For</th>
+        <th class="right">Original</th><th class="right">CNY</th><th>Desc</th>
+      </tr>
+    `;
+    dayItems.slice().reverse().forEach(e=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML = `
+        <td><span class="pill">${e.category}</span></td>
+        <td>${e.paidBy}</td>
+        <td class="muted">${e.beneficiaries.join(", ")}</td>
+        <td class="right">${minorToStr(e.original.minor, e.original.ccy)}</td>
+        <td class="right">${minorToStr(e.cnyFen, "CNY")}</td>
+        <td class="muted">${(e.desc||"").slice(0,90)}</td>
+      `;
+      listT.appendChild(tr);
+    });
+  }
+
+  // ------------------------
+  // Save / Load trips
+  // ------------------------
+  function newTrip(){
+    currentTripId = null;
+    $("deleteTripBtn").disabled = true;
+
+    $("tripName").value = "CD + CQ Trip";
+    $("tripDate").value = todayISO();
+
+    // Default FX (you can edit)
+    // Using a reasonable placeholder; change to the actual rate before trip.
+    if (!$("fxRate").value) $("fxRate").value = "5.00";
+
+    me = "Dex";
+    $("meSelect").value = me;
+    $("paidBy").value = me;
+
+    selectedCategory = "General";
+    beneficiarySet = new Set();
+    expenses = [];
+
+    $("amount").value = "";
+    $("amountCcy").value = "CNY";
+    $("desc").value = "";
+    $("expenseDT").value = "";
+
+    renderCategories();
+    renderBeneficiaries();
+    renderExpenseTable();
+    recalcAll();
+    refreshDaySelect();
+    renderDaily();
+  }
+
+  function getTripObj(){
+    return {
+      id: currentTripId || (crypto.randomUUID?.() || ("t-"+Date.now()+Math.random().toString(16).slice(2))),
+      name: $("tripName").value.trim() || "Untitled trip",
+      date: $("tripDate").value || todayISO(),
+      fxRate: $("fxRate").value.trim(),
+      me: $("meSelect").value,
+      expenses,
+      updatedAt: new Date().toISOString(),
+      version: 2
+    };
+  }
+
+  function loadTripObj(t){
+    currentTripId = t.id;
+    $("deleteTripBtn").disabled = false;
+
+    $("tripName").value = t.name || "Untitled trip";
+    $("tripDate").value = t.date || todayISO();
+    $("fxRate").value = (t.fxRate || "5.00");
+
+    me = (t.me && PEOPLE.includes(t.me)) ? t.me : "Dex";
+    $("meSelect").value = me;
+    $("paidBy").value = me;
+
+    expenses = Array.isArray(t.expenses) ? t.expenses : [];
+
+    selectedCategory = "General";
+    beneficiarySet = new Set();
+    $("amount").value = "";
+    $("amountCcy").value = "CNY";
+    $("desc").value = "";
+    $("expenseDT").value = "";
+
+    renderCategories();
+    renderBeneficiaries();
+    renderExpenseTable();
+    recalcAll();
+    refreshDaySelect();
+    renderDaily();
+  }
+
+  async function refreshHistory(){
+    const all = await dbGetAll();
+    all.sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.updatedAt||"").localeCompare(a.updatedAt||""));
+    const sel = $("historySelect");
+    sel.innerHTML="";
+    if (!all.length){
+      const opt=document.createElement("option");
+      opt.value=""; opt.textContent="(no saved trips yet)";
+      sel.appendChild(opt);
+      return;
+    }
+    all.forEach(t=>{
+      const opt=document.createElement("option");
+      opt.value=t.id;
+      opt.textContent=`${t.date || ""} — ${t.name || "Untitled"} (${(t.expenses||[]).length} expenses)`;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ------------------------
+  // Export / Import
+  // ------------------------
+  async function exportJSON(){
+    const all = await dbGetAll();
+    const payload = { exportedAt: new Date().toISOString(), trips: all };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="trip_splitter_backup.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function importJSONText(text){
+    let data;
+    try{ data = JSON.parse(text); } catch { alert("Invalid JSON"); return; }
+    const trips = data?.trips;
+    if (!Array.isArray(trips)){ alert("JSON missing trips array"); return; }
+    for (const t of trips){
+      if (t && t.id) await dbPut(t);
+    }
+    await refreshHistory();
+    alert("Imported ✅");
+  }
+
+  // ------------------------
+  // Events
+  // ------------------------
+  function bindEvents(){
+    $("meSelect").onchange = () => {
+      me = $("meSelect").value;
+      $("paidBy").value = me;
+    };
+
+    $("fxRate").onchange = () => {
+      // Recalc with updated FX because SGD entries depend on it
+      recalcAll();
+      renderDaily();
+    };
+
+    $("daySelect").onchange = () => renderDaily();
+
+    $("todayBtn").onclick = () => {
+      const d = todayISO();
+      const sel = $("daySelect");
+      // if the day exists, select it; else just render blank for that day
+      const options = [...sel.options].map(o=>o.value);
+      if (options.includes(d)) sel.value = d;
+      renderDaily();
+    };
+
+    $("addExpenseBtn").onclick = () => {
+      const paidBy = $("paidBy").value || me;
+      const amtMinor = parseMoneyToMinor($("amount").value);
+      const ccy = $("amountCcy").value;
+      const fx = getFxRate();
+
+      if (!paidBy) return alert("Pick who paid.");
+      if (amtMinor === null || amtMinor <= 0) return alert("Enter a valid amount (e.g. 35.50).");
+      if (ccy === "SGD" && !fx) return alert("Please set SGD→CNY exchange rate (e.g. 5.00).");
+
+      const beneficiaries = [...beneficiarySet].filter(n=>PEOPLE.includes(n));
+      if (!beneficiaries.length) return alert("Select at least 1 beneficiary (who this expense is for).");
+
+      const dtLocal = $("expenseDT").value || "";
+      const dayISO = isoDateFromDTLocal(dtLocal) || todayISO();
+
+      let cnyFen;
+      if (ccy === "CNY") {
+        // amtMinor already in fen
+        cnyFen = amtMinor;
+      } else {
+        // SGD cents -> CNY fen
+        cnyFen = sgdCentsToCnyFen(amtMinor, fx);
+      }
+
+      const e = {
+        id: crypto.randomUUID?.() || ("e-"+Date.now()+Math.random().toString(16).slice(2)),
+        category: selectedCategory,
+        paidBy,
+        original: { ccy, minor: amtMinor },
+        cnyFen,
+        desc: $("desc").value.trim(),
+        dtLocal,
+        dayISO,
+        beneficiaries
+      };
+
+      expenses.push(e);
+
+      // reset inputs
+      $("amount").value = "";
+      $("desc").value = "";
+      $("expenseDT").value = "";
+      beneficiarySet = new Set();
+      renderBeneficiaries();
+
+      renderExpenseTable();
+      recalcAll();
+      refreshDaySelect();
+      renderDaily();
+    };
+
+    $("clearExpenseBtn").onclick = () => {
+      $("amount").value = "";
+      $("desc").value = "";
+      $("expenseDT").value = "";
+      beneficiarySet = new Set();
+      renderBeneficiaries();
+    };
+
+    $("saveTripBtn").onclick = async () => {
+      const t = getTripObj();
+      await dbPut(t);
+      currentTripId = t.id;
+      $("deleteTripBtn").disabled = false;
+      await refreshHistory();
+      alert("Saved locally ✅");
+
+      // After saving, ensure daily view reflects latest
+      refreshDaySelect();
+      renderDaily();
+    };
+
+    $("newTripBtn").onclick = () => {
+      if (confirm("Start a new trip? Unsaved changes will be lost.")) newTrip();
+    };
+
+    $("loadTripBtn").onclick = async () => {
+      const id = $("historySelect").value;
+      if (!id) return;
+      const t = await dbGet(id);
+      if (!t) return alert("Could not load trip.");
+      loadTripObj(t);
+    };
+
+    $("deleteTripBtn").onclick = async () => {
+      if (!currentTripId) return;
+      if (!confirm("Delete this saved trip from this device?")) return;
+      await dbDelete(currentTripId);
+      currentTripId = null;
+      $("deleteTripBtn").disabled = true;
+      await refreshHistory();
+      alert("Deleted ✅");
+      newTrip();
+    };
+
+    $("exportBtn").onclick = exportJSON;
+
+    $("importBtn").onclick = () => $("importFile").click();
+
+    $("importFile").onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      await importJSONText(text);
+      e.target.value="";
+    };
+  }
+
+  // ------------------------
+  // Init
+  // ------------------------
+  async function init(){
+    $("tripDate").value = todayISO();
+    $("tripName").value = "CD + CQ Trip";
+    $("fxRate").value = "5.00"; // editable
+
+    try{
+      db = await openDB();
+      $("dbStatus").textContent = "DB: IndexedDB ready (local storage).";
+    } catch(err){
+      $("dbStatus").textContent = "DB ERROR: IndexedDB not available (don’t use Private Mode).";
+      alert("IndexedDB not available. Use Safari normal mode (not private).");
+      return;
+    }
+
+    renderPeople();
+    renderMeSelect();
+    renderPaidBy();
+    renderCategories();
+    renderBeneficiaries();
+    renderExpenseTable();
+    recalcAll();
+
+    refreshDaySelect();
+    renderDaily();
+
+    bindEvents();
+    await refreshHistory();
+
+    // default me
+    me = "Dex";
+    $("meSelect").value = me;
+    $("paidBy").value = me;
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
