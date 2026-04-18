@@ -23,13 +23,23 @@
       --shadow: 0 2px 12px rgba(0,0,0,0.08);
       --st: env(safe-area-inset-top);
       --sb: env(safe-area-inset-bottom);
+      --app-bg-image: none;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #1a1a1a; --card: #2c2c2e; --text: #f0f0f0;
+      --muted: #8e8e93; --border: #3a3a3c;
+      --green-light: rgba(28,194,159,.15);
     }
 
     html, body { height: 100%; overflow: hidden; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      background: var(--bg);
+      background: var(--app-bg-image), var(--bg);
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
       color: var(--text);
       -webkit-tap-highlight-color: transparent;
       user-select: none;
@@ -50,6 +60,20 @@
       left: 50%;
       right: auto;
       transform: translateX(-50%);
+    }
+    body.has-app-bg .screen {
+      background:
+        linear-gradient(rgba(240,240,240,.86), rgba(240,240,240,.92)),
+        var(--app-bg-image);
+      background-size: cover;
+      background-position: center;
+    }
+    html[data-theme="dark"] body.has-app-bg .screen {
+      background:
+        linear-gradient(rgba(26,26,26,.84), rgba(26,26,26,.91)),
+        var(--app-bg-image);
+      background-size: cover;
+      background-position: center;
     }
     .screen.hidden { display: none; }
 
@@ -483,6 +507,39 @@
     .auth-sub { font-size: 13px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
     .auth-grid { display: grid; gap: 8px; }
     .auth-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .settings-sec {
+      margin: 16px; padding: 16px; background: var(--card);
+      border-radius: var(--r); border: 1px solid var(--border);
+    }
+    .settings-row { display: grid; gap: 10px; margin-top: 10px; }
+    .seg { display: flex; gap: 8px; }
+    .seg-btn {
+      flex: 1; min-height: 40px; border-radius: var(--r-sm);
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--muted); font-size: 13px; font-weight: 800;
+      cursor: pointer;
+    }
+    .seg-btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+    .bg-preview {
+      min-height: 86px; border-radius: var(--r-sm); border: 1px solid var(--border);
+      background: var(--green-light); background-size: cover; background-position: center;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 13px; font-weight: 700; overflow: hidden;
+    }
+    .post-composer {
+      margin: 16px; padding: 16px; background: var(--card);
+      border: 1px solid var(--border); border-radius: var(--r);
+    }
+    .post-feed { padding-bottom: 16px; }
+    .post-card {
+      margin: 0 16px 10px; padding: 14px; background: var(--card);
+      border: 1px solid var(--border); border-radius: var(--r);
+    }
+    .post-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .post-author { font-size: 14px; font-weight: 800; }
+    .post-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .post-body { font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+    textarea.field { resize: vertical; min-height: 96px; line-height: 1.4; font-family: inherit; }
 
     @media (max-width: 390px) {
       .home-hero { padding: calc(var(--st) + 16px) 16px 20px; }
@@ -528,6 +585,7 @@
       .share-btn-row { flex-direction: column; }
       .auth-card { margin: 12px; padding: 12px; }
       .auth-actions { flex-direction: column; }
+      .settings-sec, .post-composer, .post-card { margin-left: 12px; margin-right: 12px; }
     }
 
     /* ── MISC ── */
@@ -536,26 +594,85 @@
     .mt20 { margin-top: 20px; }
     .sb-pad { height: calc(var(--sb) + 80px); }
 
+    html[data-theme="dark"] .nk,
+    html[data-theme="dark"] .cat-tile,
+    html[data-theme="dark"] .payer-tile,
+    html[data-theme="dark"] .chip,
+    html[data-theme="dark"] .ccy-chip,
+    html[data-theme="dark"] .mtag,
+    html[data-theme="dark"] .field,
+    html[data-theme="dark"] .share-sec,
+    html[data-theme="dark"] .auth-card,
+    html[data-theme="dark"] .em-opt,
+    html[data-theme="dark"] .settings-sec,
+    html[data-theme="dark"] .post-composer,
+    html[data-theme="dark"] .post-card,
+    html[data-theme="dark"] .seg-btn { background: #2c2c2e; color: #f0f0f0; }
+    html[data-theme="dark"] .seg-btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+    html[data-theme="dark"] .nk.dim { background: #1c1c1e; }
+    html[data-theme="dark"] .nk:active { background: #3a3a3c; }
+    html[data-theme="dark"] .numpad { background: #1a1a1a; }
+    html[data-theme="dark"] .confirm-row,
+    html[data-theme="dark"] .exp-row,
+    html[data-theme="dark"] .bal-row,
+    html[data-theme="dark"] .settle-row,
+    html[data-theme="dark"] .settle-card,
+    html[data-theme="dark"] .group-row,
+    html[data-theme="dark"] .wiz-hdr,
+    html[data-theme="dark"] .wiz-foot,
+    html[data-theme="dark"] .tab-bar,
+    html[data-theme="dark"] .hdr { background: #2c2c2e; }
+    html[data-theme="dark"] .group-card { background: #2c2c2e; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+    html[data-theme="dark"] .settle-select { background: #2c2c2e; color: #f0f0f0; border-color: #3a3a3c; }
+    html[data-theme="dark"] .settle-summary details { background: #1a1a1a; border-color: #3a3a3c; }
+    html[data-theme="dark"] .exp-icon { background: #3a3a3c; }
+    html[data-theme="dark"] .cat-tile.sel,
+    html[data-theme="dark"] .payer-tile.sel { background: rgba(28,194,159,.2); }
+    html[data-theme="dark"] .confirm-big { background: #2c2c2e; }
+    html[data-theme="dark"] .split-hint { background: rgba(28,194,159,.15); }
+
     @media (prefers-color-scheme: dark) {
-      :root {
+      html:not([data-theme]) {
         --bg: #1a1a1a; --card: #2c2c2e; --text: #f0f0f0;
         --muted: #8e8e93; --border: #3a3a3c;
         --green-light: rgba(28,194,159,.15);
       }
-      .nk, .cat-tile, .payer-tile, .chip, .ccy-chip, .mtag,
-      .field, .share-sec, .auth-card, .em-opt { background: #2c2c2e; color: #f0f0f0; }
-      .nk.dim { background: #1c1c1e; }
-      .nk:active { background: #3a3a3c; }
-      .numpad { background: #1a1a1a; }
-      .confirm-row, .exp-row, .bal-row, .settle-row, .settle-card, .group-row,
-      .wiz-hdr, .wiz-foot, .tab-bar, .hdr { background: #2c2c2e; }
-      .group-card { background: #2c2c2e; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-      .settle-select { background: #2c2c2e; color: #f0f0f0; border-color: #3a3a3c; }
-      .settle-summary details { background: #1a1a1a; border-color: #3a3a3c; }
-      .exp-icon { background: #3a3a3c; }
-      .cat-tile.sel, .payer-tile.sel { background: rgba(28,194,159,.2); }
-      .confirm-big { background: #2c2c2e; }
-      .split-hint { background: rgba(28,194,159,.15); }
+      html:not([data-theme]) .nk,
+      html:not([data-theme]) .cat-tile,
+      html:not([data-theme]) .payer-tile,
+      html:not([data-theme]) .chip,
+      html:not([data-theme]) .ccy-chip,
+      html:not([data-theme]) .mtag,
+      html:not([data-theme]) .field,
+      html:not([data-theme]) .share-sec,
+      html:not([data-theme]) .auth-card,
+      html:not([data-theme]) .em-opt,
+      html:not([data-theme]) .settings-sec,
+      html:not([data-theme]) .post-composer,
+      html:not([data-theme]) .post-card,
+      html:not([data-theme]) .seg-btn { background: #2c2c2e; color: #f0f0f0; }
+      html:not([data-theme]) .seg-btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+      html:not([data-theme]) .nk.dim { background: #1c1c1e; }
+      html:not([data-theme]) .nk:active { background: #3a3a3c; }
+      html:not([data-theme]) .numpad { background: #1a1a1a; }
+      html:not([data-theme]) .confirm-row,
+      html:not([data-theme]) .exp-row,
+      html:not([data-theme]) .bal-row,
+      html:not([data-theme]) .settle-row,
+      html:not([data-theme]) .settle-card,
+      html:not([data-theme]) .group-row,
+      html:not([data-theme]) .wiz-hdr,
+      html:not([data-theme]) .wiz-foot,
+      html:not([data-theme]) .tab-bar,
+      html:not([data-theme]) .hdr { background: #2c2c2e; }
+      html:not([data-theme]) .group-card { background: #2c2c2e; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+      html:not([data-theme]) .settle-select { background: #2c2c2e; color: #f0f0f0; border-color: #3a3a3c; }
+      html:not([data-theme]) .settle-summary details { background: #1a1a1a; border-color: #3a3a3c; }
+      html:not([data-theme]) .exp-icon { background: #3a3a3c; }
+      html:not([data-theme]) .cat-tile.sel,
+      html:not([data-theme]) .payer-tile.sel { background: rgba(28,194,159,.2); }
+      html:not([data-theme]) .confirm-big { background: #2c2c2e; }
+      html:not([data-theme]) .split-hint { background: rgba(28,194,159,.15); }
     }
   </style>
 </head>
@@ -640,11 +757,13 @@
   </div>
   <div class="tab-bar">
     <div class="tab on" data-tab="expenses">Expenses</div>
+    <div class="tab" data-tab="community">Community</div>
     <div class="tab" data-tab="balances">Balances</div>
     <div class="tab" data-tab="settle">Settle Up</div>
   </div>
   <div class="scroll" style="padding-bottom:80px;">
     <div class="tab-pane on" id="tp-expenses"></div>
+    <div class="tab-pane" id="tp-community"></div>
     <div class="tab-pane" id="tp-balances"></div>
     <div class="tab-pane" id="tp-settle"></div>
   </div>
@@ -727,6 +846,8 @@
   let authSession = null;
   let syncTimer = null;
   let pendingJoinCode = null;
+  let authMode = 'signin';
+  let appPrefs = { theme:'light', backgroundImage:'' };
 
   let wiz = { step:1, data:{} };
 
@@ -750,6 +871,27 @@
   }
   function saveAuth() {
     try { localStorage.setItem('splittrip_auth_v1', JSON.stringify(authSession)); } catch(e){}
+  }
+  function savePrefs() {
+    try { localStorage.setItem('splittrip_prefs_v1', JSON.stringify(appPrefs)); } catch(e){}
+  }
+  function loadPrefs() {
+    try {
+      const r = localStorage.getItem('splittrip_prefs_v1');
+      if (r) appPrefs = { ...appPrefs, ...JSON.parse(r) };
+    } catch(e) { appPrefs = { theme:'light', backgroundImage:'' }; }
+    if (!['light','dark'].includes(appPrefs.theme)) appPrefs.theme = 'light';
+    applyPrefs();
+  }
+  function applyPrefs() {
+    document.documentElement.dataset.theme = appPrefs.theme;
+    const bg = appPrefs.backgroundImage || '';
+    document.body.classList.toggle('has-app-bg', Boolean(bg));
+    document.documentElement.style.setProperty('--app-bg-image', bg ? `url("${cssUrl(bg)}")` : 'none');
+  }
+
+  function cssUrl(url) {
+    return String(url).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '');
   }
   function loadAuth() {
     try {
@@ -800,6 +942,19 @@
   // ── HELPERS ──
   function uid() {
     return (crypto.randomUUID?.()) || ('id-'+Date.now()+Math.random().toString(36).slice(2));
+  }
+
+  function esc(s='') {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[c]));
+  }
+
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('en-GB', {
+      day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'
+    });
   }
 
   function avColor(name) {
@@ -1168,19 +1323,34 @@
     if (isSignedIn()) {
       return '';
     }
+    if (authMode === 'signup') {
+      return `
+        <div class="auth-card">
+          <div class="auth-title">Create account</div>
+          <div class="auth-sub">Create an account before creating or joining an online trip.</div>
+          <div class="auth-grid">
+            <input type="text" class="field" id="auth-name" placeholder="Name" value="${profile.name||''}" style="font-size:15px;padding:12px;">
+            <input type="email" class="field" id="auth-email" placeholder="Email" style="font-size:15px;padding:12px;">
+            <input type="password" class="field" id="auth-password" placeholder="Password" style="font-size:15px;padding:12px;">
+            <input type="password" class="field" id="auth-confirm-password" placeholder="Confirm password" style="font-size:15px;padding:12px;">
+          </div>
+          <div class="auth-actions">
+            <button class="btn btn-green btn-sm" id="auth-signup" style="flex:1;font-size:13px;">Create Account</button>
+            <button class="btn btn-ghost btn-sm" id="auth-show-signin" style="flex:1;font-size:13px;">Back to Sign In</button>
+          </div>
+        </div>`;
+    }
     return `
       <div class="auth-card">
         <div class="auth-title">Sign in for private online trips</div>
-        <div class="auth-sub">Create an account or sign in before creating or joining an online trip.</div>
+        <div class="auth-sub">Sign in before creating or joining an online trip.</div>
         <div class="auth-grid">
-          <input type="text" class="field" id="auth-name" placeholder="Display name" value="${profile.name||''}" style="font-size:15px;padding:12px;">
-          <input type="email" class="field" id="auth-email" placeholder="Email" style="font-size:15px;padding:12px;">
-          <input type="password" class="field" id="auth-password" placeholder="Password" style="font-size:15px;padding:12px;">
-          <input type="password" class="field" id="auth-confirm-password" placeholder="Confirm password" style="font-size:15px;padding:12px;">
+          <input type="text" class="field" id="auth-username" placeholder="Username" style="font-size:15px;padding:12px;">
+          <input type="password" class="field" id="auth-signin-password" placeholder="Password" style="font-size:15px;padding:12px;">
         </div>
         <div class="auth-actions">
           <button class="btn btn-green btn-sm" id="auth-signin" style="flex:1;font-size:13px;">Sign In</button>
-          <button class="btn btn-ghost btn-sm" id="auth-signup" style="flex:1;font-size:13px;">Create Account</button>
+          <button class="btn btn-ghost btn-sm" id="auth-show-signup" style="flex:1;font-size:13px;">Create Account</button>
         </div>
       </div>`;
   }
@@ -1188,23 +1358,105 @@
   function bindAuth() {
     document.getElementById('auth-signin')?.addEventListener('click', signIn);
     document.getElementById('auth-signup')?.addEventListener('click', signUp);
+    document.getElementById('auth-show-signup')?.addEventListener('click', () => setAuthMode('signup'));
+    document.getElementById('auth-show-signin')?.addEventListener('click', () => setAuthMode('signin'));
     document.getElementById('auth-signout')?.addEventListener('click', signOut);
   }
 
-  function authFormValues(requireConfirm=false) {
+  function prefsHTML() {
+    const bg = appPrefs.backgroundImage || '';
+    return `
+      <div class="settings-sec">
+        <div class="auth-title">App Appearance</div>
+        <div class="auth-sub">Choose a theme and set a background picture for this device.</div>
+        <div class="settings-row">
+          <div class="seg">
+            <button class="seg-btn ${appPrefs.theme==='light'?'on':''}" data-theme-choice="light">Light</button>
+            <button class="seg-btn ${appPrefs.theme==='dark'?'on':''}" data-theme-choice="dark">Dark</button>
+          </div>
+          <div class="bg-preview" id="bg-preview" style="${bg?`background-image:url(&quot;${esc(cssUrl(bg))}&quot;)`:''}">
+            ${bg?'':'No background selected'}
+          </div>
+          <input type="url" class="field" id="bg-url-input" placeholder="Paste image URL" value="${esc(bg.startsWith('data:')?'':bg)}" style="font-size:15px;padding:12px;">
+          <div class="auth-actions">
+            <button class="btn btn-green btn-sm" id="bg-url-apply" style="flex:1;font-size:13px;">Use URL</button>
+            <button class="btn btn-ghost btn-sm" id="bg-upload-btn" style="flex:1;font-size:13px;">Upload Picture</button>
+            <button class="btn btn-ghost btn-sm" id="bg-clear-btn" style="flex:1;font-size:13px;">Clear</button>
+          </div>
+          <input type="file" id="bg-file-input" accept="image/*" style="display:none;">
+        </div>
+      </div>`;
+  }
+
+  function bindPrefs() {
+    document.querySelectorAll('[data-theme-choice]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        appPrefs.theme = btn.dataset.themeChoice;
+        savePrefs();
+        applyPrefs();
+        renderHome();
+      });
+    });
+    document.getElementById('bg-url-apply')?.addEventListener('click', ()=>{
+      const url = (document.getElementById('bg-url-input')?.value || '').trim();
+      if (!url) return;
+      appPrefs.backgroundImage = url;
+      savePrefs();
+      applyPrefs();
+      renderHome();
+    });
+    document.getElementById('bg-upload-btn')?.addEventListener('click', ()=>document.getElementById('bg-file-input')?.click());
+    document.getElementById('bg-clear-btn')?.addEventListener('click', ()=>{
+      appPrefs.backgroundImage = '';
+      savePrefs();
+      applyPrefs();
+      renderHome();
+    });
+    document.getElementById('bg-file-input')?.addEventListener('change', ev=>{
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      if (file.size > 2500000 && !confirm('This picture is large and may make the app slower to load on this device. Use it anyway?')) {
+        ev.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        appPrefs.backgroundImage = reader.result;
+        savePrefs();
+        applyPrefs();
+        renderHome();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    renderHome();
+  }
+
+  function signUpFormValues() {
     const name = (document.getElementById('auth-name')?.value || profile.name || '').trim();
     const email = (document.getElementById('auth-email')?.value || '').trim();
     const password = document.getElementById('auth-password')?.value || '';
     const confirmPassword = document.getElementById('auth-confirm-password')?.value || '';
+    if (!name) throw new Error('Enter your name.');
     if (!email || !password) throw new Error('Enter both email and password.');
     if (password.length < 6) throw new Error('Password must be at least 6 characters.');
-    if (requireConfirm && password !== confirmPassword) throw new Error('Passwords do not match.');
+    if (password !== confirmPassword) throw new Error('Passwords do not match.');
     return { name, email, password };
+  }
+
+  function signInFormValues() {
+    const username = (document.getElementById('auth-username')?.value || '').trim();
+    const password = document.getElementById('auth-signin-password')?.value || '';
+    if (!username || !password) throw new Error('Enter both username and password.');
+    return { username, password };
   }
 
   async function signUp() {
     try {
-      const { name, email, password } = authFormValues(true);
+      const { name, email, password } = signUpFormValues();
       const data = await authRequest('signup', {
         method:'POST',
         body:{ email, password, data:{ display_name:name || email.split('@')[0] } },
@@ -1231,10 +1483,10 @@
 
   async function signIn() {
     try {
-      const { email, password } = authFormValues(false);
+      const { username, password } = signInFormValues();
       const data = await authRequest('token?grant_type=password', {
         method:'POST',
-        body:{ email, password },
+        body:{ email:username, password },
       });
       authSession = data;
       applyAuthProfile();
@@ -1294,12 +1546,14 @@
       const code = pendingJoinCode || urlTripCode();
       list.innerHTML = `
         ${authHTML()}
+        ${prefsHTML()}
         <div class="empty">
           <div class="icon">🔒</div>
           <h3>Sign in required</h3>
           <p>${code?`Sign in to join trip ${code}.`:'Only signed-in trip members can view online trips.'}</p>
         </div>`;
       bindAuth();
+      bindPrefs();
       return;
     }
 
@@ -1307,6 +1561,7 @@
     if (!visibleGroups.length) {
       list.innerHTML = `
         ${authHTML()}
+        ${prefsHTML()}
         <div class="empty">
           <div class="icon">✈️</div>
           <h3>No trips yet</h3>
@@ -1319,9 +1574,11 @@
       document.getElementById('first-group-btn')?.addEventListener('click', ()=>openCreate());
       document.getElementById('join-online-btn')?.addEventListener('click', joinOnlineTrip);
       bindAuth();
+      bindPrefs();
     } else {
-      list.innerHTML = authHTML();
+      list.innerHTML = authHTML() + prefsHTML();
       bindAuth();
+      bindPrefs();
       const sHdr = document.createElement('div');
       sHdr.className = 'groups-section-hdr';
       sHdr.textContent = 'My Trips';
@@ -1483,6 +1740,7 @@
       if (idx>=0) {
         obj.expenses=groups[idx].expenses;
         obj.payments=groups[idx].payments||[];
+        obj.posts=groups[idx].posts||[];
         obj.createdAt=groups[idx].createdAt;
         obj.remoteTripId=groups[idx].remoteTripId;
         obj.remoteShareCode=groups[idx].remoteShareCode;
@@ -1541,6 +1799,7 @@
     }
 
     renderExpenses(g);
+    renderCommunity(g);
     renderBalances(g);
     renderSettle(g);
   }
@@ -1548,6 +1807,69 @@
   function setTab(name) {
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
     document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('on',p.id===`tp-${name}`));
+    const addBtn = document.getElementById('add-exp-btn');
+    if (addBtn) addBtn.style.display = name === 'expenses' ? 'flex' : 'none';
+  }
+
+  function renderCommunity(g) {
+    const c = document.getElementById('tp-community');
+    const posts = [...(g.posts||[])].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+    c.innerHTML = `
+      <div class="post-composer">
+        <div class="auth-title">Guangzhou Community</div>
+        <div class="auth-sub">Write a trip update, recommendation, or memory for everyone in this group.</div>
+        <textarea class="field" id="post-input" maxlength="600" placeholder="Write about your Guangzhou trip..."></textarea>
+        <button class="btn btn-green btn-sm mt8" id="post-submit" style="font-size:13px;">Post</button>
+      </div>
+      <div class="post-feed" id="post-feed">
+        ${posts.length ? posts.map(p=>postHTML(p)).join('') : `
+          <div class="empty" style="padding:42px 24px;">
+            <div class="icon">ðŸ’¬</div>
+            <p style="font-size:15px;color:var(--muted);">No community posts yet.<br>Share the first Guangzhou trip note.</p>
+          </div>`}
+      </div>`;
+    document.getElementById('post-submit')?.addEventListener('click', ()=>addPost(g));
+    document.querySelectorAll('.js-del-post').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const post = (g.posts||[]).find(p=>p.id===btn.dataset.id);
+        if (!post) return;
+        if (confirm('Delete this post?')) {
+          g.posts = (g.posts||[]).filter(p=>p.id!==post.id);
+          save();
+          renderCommunity(g);
+        }
+      });
+    });
+  }
+
+  function postHTML(p) {
+    return `
+      <div class="post-card">
+        <div class="post-top">
+          ${avatarHTML(p.author || 'Member', 'av-sm')}
+          <div style="flex:1;min-width:0;">
+            <div class="post-author">${esc(p.author || 'Member')}</div>
+            <div class="post-time">${esc(fmtDateTime(p.createdAt))}</div>
+          </div>
+          <button class="del-btn js-del-post" data-id="${esc(p.id)}" title="Delete post">ðŸ—‘</button>
+        </div>
+        <div class="post-body">${esc(p.body)}</div>
+      </div>`;
+  }
+
+  function avatarHTML(name, cls='av-sm') {
+    return `<div class="av ${cls}" style="background:${avColor(name)}">${esc(avInit(name))}</div>`;
+  }
+
+  function addPost(g) {
+    const input = document.getElementById('post-input');
+    const body = (input?.value || '').trim();
+    if (!body) { alert('Write something before posting.'); return; }
+    const author = g.iAm || profile.name || authSession?.user?.email?.split('@')[0] || 'Member';
+    if (!g.posts) g.posts = [];
+    g.posts.push({ id:uid(), author, body, createdAt:new Date().toISOString() });
+    save();
+    renderCommunity(g);
   }
 
   function renderExpenses(g) {
@@ -2518,6 +2840,9 @@
               if (!t.payments) t.payments=[];
               const pay=new Set(t.payments.map(p=>p.id));
               t.payments.push(...(g.payments||[]).filter(p=>!pay.has(p.id)));
+              if (!t.posts) t.posts=[];
+              const posts=new Set(t.posts.map(p=>p.id));
+              t.posts.push(...(g.posts||[]).filter(p=>!posts.has(p.id)));
             } else { groups.push(g); }
           });
           save(); renderHome();
@@ -2581,6 +2906,7 @@
 
   // ── INIT ──
   load();
+  loadPrefs();
   loadProfile();
   loadAuth();
   pendingJoinCode = urlTripCode();
