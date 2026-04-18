@@ -1611,10 +1611,14 @@
         obj.remoteTripId=groups[idx].remoteTripId;
         obj.remoteShareCode=groups[idx].remoteShareCode;
         obj.finalizedAt=groups[idx].finalizedAt;
+        obj.creatorUserId=groups[idx].creatorUserId;
+        obj.creatorName=groups[idx].creatorName;
         groups[idx]=obj;
         if (obj.remoteTripId) publishGroupOnline(obj,false).catch(()=>{});
       }
     } else {
+      obj.creatorUserId = authSession?.user?.id || null;
+      obj.creatorName = profile.name || null;
       groups.push(obj);
     }
     save();
@@ -1831,7 +1835,24 @@
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
     document.querySelector('.js-import')?.addEventListener('click', ()=>doImport(g.id));
-    document.querySelector('.js-del-group')?.addEventListener('click', ()=>{
+    document.querySelector('.js-del-group')?.addEventListener('click', async ()=>{
+      if (g.remoteTripId) {
+        if (!isSignedIn()) {
+          alert('Sign in to delete this group.');
+          return;
+        }
+        if (!g.creatorUserId) {
+          try {
+            const rows = await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}&select=created_by_user`);
+            g.creatorUserId = rows?.[0]?.created_by_user || null;
+            save();
+          } catch(e) {}
+        }
+        if (g.creatorUserId && authSession.user.id !== g.creatorUserId) {
+          alert(`Only the group creator can delete "${g.name}".`);
+          return;
+        }
+      }
       if (confirm(`Delete "${g.name}"? This cannot be undone.`)) {
         groups=groups.filter(x=>x.id!==g.id);
         save(); show('home'); renderHome();
@@ -1950,6 +1971,7 @@
       g.baseCurrency = trip.base_currency || g.baseCurrency;
       g.fxRates = trip.fx_rates || g.fxRates;
       g.remoteShareCode = trip.share_code || g.remoteShareCode;
+      g.creatorUserId = g.creatorUserId || trip.created_by_user || null;
       g.finalizedAt = trip.finalized_at || undefined;
 
       const names = new Set(g.members||[]);
