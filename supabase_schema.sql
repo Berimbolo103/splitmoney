@@ -122,6 +122,105 @@ $$;
 
 grant execute on function public.is_trip_member(text) to authenticated;
 
+-- Create a trip and the creator membership together. A direct insert into
+-- trips cannot satisfy member-only RLS yet because the creator is not a member
+-- until the membership row exists.
+create or replace function public.create_trip_with_membership(
+  p_id text,
+  p_share_code text,
+  p_name text,
+  p_emoji text,
+  p_base_currency text,
+  p_fx_rates jsonb,
+  p_display_name text,
+  p_created_by_device text
+)
+returns table (
+  id text,
+  share_code text,
+  name text,
+  emoji text,
+  base_currency text,
+  fx_rates jsonb,
+  created_at timestamptz,
+  finalized_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_trip public.trips%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Not signed in';
+  end if;
+
+  select *
+  into v_trip
+  from public.trips t
+  where t.id = p_id;
+
+  if found and not public.is_trip_member(v_trip.id) then
+    raise exception 'You are not a member of this trip';
+  end if;
+
+  if not found then
+    insert into public.trips (
+      id,
+      share_code,
+      name,
+      emoji,
+      base_currency,
+      fx_rates,
+      created_by_device,
+      created_by_user,
+      updated_at
+    )
+    values (
+      p_id,
+      upper(trim(p_share_code)),
+      p_name,
+      p_emoji,
+      coalesce(p_base_currency, 'CNY'),
+      coalesce(p_fx_rates, '{}'::jsonb),
+      p_created_by_device,
+      auth.uid(),
+      now()
+    )
+    returning * into v_trip;
+  else
+    update public.trips
+    set
+      name = p_name,
+      emoji = p_emoji,
+      base_currency = coalesce(p_base_currency, base_currency),
+      fx_rates = coalesce(p_fx_rates, fx_rates),
+      updated_at = now()
+    where public.trips.id = v_trip.id
+    returning * into v_trip;
+  end if;
+
+  insert into public.trip_members (trip_id, user_id, display_name, role)
+  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'member')
+  on conflict (trip_id, user_id)
+  do update set display_name = excluded.display_name;
+
+  return query
+  select
+    v_trip.id,
+    v_trip.share_code,
+    v_trip.name,
+    v_trip.emoji,
+    v_trip.base_currency,
+    v_trip.fx_rates,
+    v_trip.created_at,
+    v_trip.finalized_at;
+end;
+$$;
+
+grant execute on function public.create_trip_with_membership(text, text, text, text, text, jsonb, text, text) to authenticated;
+
 -- Trips: creators can insert; members can read/update/delete.
 drop policy if exists "splittrip members read trips" on public.trips;
 create policy "splittrip members read trips"

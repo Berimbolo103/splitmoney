@@ -677,6 +677,7 @@
   let profile = { id:null, name:'' };
   let authSession = null;
   let syncTimer = null;
+  let pendingJoinCode = null;
 
   let wiz = { step:1, data:{} };
 
@@ -895,6 +896,30 @@
     let out = '';
     for (let i=0; i<6; i++) out += chars[Math.floor(Math.random()*chars.length)];
     return out;
+  }
+
+  function urlTripCode() {
+    const params = new URLSearchParams(location.search);
+    return (params.get('trip') || '').trim().toUpperCase();
+  }
+
+  function tripInviteUrl(code) {
+    const url = new URL(location.href);
+    url.searchParams.set('trip', code);
+    return url.toString();
+  }
+
+  function setTripUrl(code) {
+    if (!code) return;
+    const url = new URL(location.href);
+    url.searchParams.set('trip', code);
+    history.replaceState(null,'',url);
+  }
+
+  function clearTripUrl() {
+    const url = new URL(location.href);
+    url.searchParams.delete('trip');
+    history.replaceState(null,'',url.pathname + url.search + url.hash);
   }
 
   function remoteTripRow(g) {
@@ -1145,6 +1170,12 @@
         authSession = data;
         applyAuthProfile();
         saveAuth();
+        await loadMyOnlineTrips(true);
+        if (pendingJoinCode) {
+          await joinOnlineTrip(pendingJoinCode);
+          alert('Account created and joined the trip.');
+          return;
+        }
         renderHome();
         alert('Account created and signed in.');
       } else {
@@ -1166,6 +1197,10 @@
       applyAuthProfile();
       saveAuth();
       await loadMyOnlineTrips(true);
+      if (pendingJoinCode) {
+        await joinOnlineTrip(pendingJoinCode);
+        return;
+      }
       renderHome();
     } catch(err) {
       alert(`Sign in failed:\n${err.message}`);
@@ -1195,12 +1230,13 @@
     }
     const list = document.getElementById('groups-list');
     if (onlineReady() && !isSignedIn()) {
+      const code = pendingJoinCode || urlTripCode();
       list.innerHTML = `
         ${authHTML()}
         <div class="empty">
           <div class="icon">🔒</div>
           <h3>Sign in required</h3>
-          <p>Only signed-in trip members can view online trips.</p>
+          <p>${code?`Sign in to join trip ${code}.`:'Only signed-in trip members can view online trips.'}</p>
         </div>`;
       bindAuth();
       return;
@@ -1400,6 +1436,7 @@
     const g=groups.find(x=>x.id===id);
     if (!g) return;
     renderGroup(g);
+    if (g.remoteShareCode) setTripUrl(g.remoteShareCode);
     show('group');
     setTab('expenses');
     startAutoSync(g);
@@ -1617,21 +1654,44 @@
     }
     if (!requireSignIn()) return;
     try {
+      const wasOnline = Boolean(g.remoteTripId);
       const row = remoteTripRow(g);
       g.remoteTripId = row.id;
       g.remoteShareCode = row.share_code;
 
-      await db('trips?on_conflict=id', {
-        method:'POST',
-        prefer:'resolution=merge-duplicates',
-        body: row,
-      });
-
-      await db('trip_members?on_conflict=trip_id,user_id', {
-        method:'POST',
-        prefer:'resolution=merge-duplicates',
-        body: remoteTripMemberRow(g),
-      });
+      if (!wasOnline) {
+        const created = await db('rpc/create_trip_with_membership', {
+          method:'POST',
+          body:{
+            p_id: row.id,
+            p_share_code: row.share_code,
+            p_name: row.name,
+            p_emoji: row.emoji,
+            p_base_currency: row.base_currency,
+            p_fx_rates: row.fx_rates,
+            p_display_name: remoteTripMemberRow(g).display_name,
+            p_created_by_device: row.created_by_device,
+          },
+        });
+        const createdTrip = created?.[0];
+        if (createdTrip) {
+          g.remoteTripId = createdTrip.id;
+          g.remoteShareCode = createdTrip.share_code;
+        }
+      } else {
+        await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}`, {
+          method:'PATCH',
+          prefer:'return=minimal',
+          body: {
+            name: row.name,
+            emoji: row.emoji,
+            base_currency: row.base_currency,
+            fx_rates: row.fx_rates,
+            updated_at: row.updated_at,
+            finalized_at: row.finalized_at,
+          },
+        });
+      }
 
       const members = remoteMemberRows(g);
       if (members.length) {
@@ -1664,9 +1724,11 @@
       renderGroup(g);
       startAutoSync(g);
       if (showAlert) {
+        const url = tripInviteUrl(g.remoteShareCode);
         const msg = `Online trip ready. Code: ${g.remoteShareCode}`;
-        navigator.clipboard?.writeText(g.remoteShareCode).catch(()=>{});
-        alert(`${msg}\n\nSend this code to your friends. They can tap Join Online and enter it.`);
+        navigator.clipboard?.writeText(url).catch(()=>{});
+        setTripUrl(g.remoteShareCode);
+        alert(`${msg}\n\nInvite link copied if your browser allows it:\n${url}\n\nFriends can open this link, sign in, and join the trip.`);
       }
     } catch(err) {
       if (showAlert) alert(`Online publish failed:\n${err.message}`);
@@ -1717,13 +1779,13 @@
     }
   }
 
-  async function joinOnlineTrip() {
+  async function joinOnlineTrip(codeOverride=null) {
     if (!onlineReady()) {
       alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
       return;
     }
     if (!requireSignIn()) return;
-    const code = (prompt('Enter the online trip code:')||'').trim().toUpperCase();
+    const code = (codeOverride || prompt('Enter the online trip code:', pendingJoinCode || urlTripCode()) || '').trim().toUpperCase();
     if (!code) return;
     try {
       const tripRows = await db('rpc/join_trip_by_code', {
@@ -1752,6 +1814,7 @@
         groups.push(g);
       }
       await syncGroupOnline(g,true);
+      pendingJoinCode = null;
       save();
       openGroup(g.id);
     } catch(err) {
@@ -2320,6 +2383,17 @@
   function doShare(groupId) {
     const g=groups.find(x=>x.id===groupId);
     if (!g) return;
+    if (g.remoteShareCode) {
+      const url = tripInviteUrl(g.remoteShareCode);
+      if (navigator.share) {
+        navigator.share({title:g.name,text:`Join "${g.name}" on SplitTrip:\n${url}`,url}).catch(()=>{});
+      } else {
+        navigator.clipboard?.writeText(url)
+          .then(()=>alert('Invite link copied. Send it to your group.'))
+          .catch(()=>prompt('Copy this invite link:',url));
+      }
+      return;
+    }
     const code=btoa(unescape(encodeURIComponent(JSON.stringify({st:true,g}))));
     if (navigator.share) {
       navigator.share({title:g.name,text:`SplitTrip code for "${g.name}":\n\n${code}`}).catch(()=>{});
@@ -2413,6 +2487,7 @@
     // Group detail
     document.getElementById('g-back').addEventListener('click', ()=>{
       if (syncTimer) { clearInterval(syncTimer); syncTimer=null; }
+      clearTripUrl();
       show('home'); renderHome();
     });
     document.getElementById('g-edit').addEventListener('click', ()=>openCreate(gid));
@@ -2434,12 +2509,16 @@
   load();
   loadProfile();
   loadAuth();
+  pendingJoinCode = urlTripCode();
   if (onlineReady() && isSignedIn()) groups = [];
   ensureProfileName();
   bind();
   renderHome();
   if (onlineReady() && isSignedIn()) {
-    loadMyOnlineTrips(true).then(()=>renderHome());
+    loadMyOnlineTrips(true).then(async ()=>{
+      if (pendingJoinCode) await joinOnlineTrip(pendingJoinCode);
+      else renderHome();
+    });
   }
   show('home');
 })();

@@ -27,6 +27,7 @@ This creates or updates:
 - `members`
 - `expenses`
 - `payments`
+- `create_trip_with_membership(...)` RPC function
 - `join_trip_by_code(...)` RPC function
 - member-only row-level security policies
 
@@ -55,8 +56,8 @@ The anon key is still public in frontend apps. The security now comes from Supab
 3. Create a group and add split members.
 4. Open the group.
 5. Tap **Create Online Trip**.
-6. Send the online trip code to friends.
-7. Friends sign in, tap **Join Online**, and enter the code.
+6. Send the generated trip URL to friends. It looks like `...?trip=ABC123`.
+7. Friends open that URL, sign in, and the app joins the trip from the link.
 
 The active trip syncs every 10 seconds. Only signed-in users who are members of that trip can read or write that trip's online data. Expenses and paid settlement records both sync online.
 
@@ -67,7 +68,9 @@ The active trip syncs every 10 seconds. Only signed-in users who are members of 
 - Expense rows are readable/writable only by trip members.
 - Payment rows are readable/writable only by trip members.
 - Joining by code is handled by `join_trip_by_code(...)`, which creates the signed-in user's membership.
+- Creating a new online trip is handled by `create_trip_with_membership(...)`, which creates the trip and creator membership together so RLS does not block the first insert.
 - LocalStorage is still used as a cache and for convenience, not as the security boundary.
+- The base app URL does not reveal trips. Trip URLs contain invite codes, but users still must sign in and become members before the trip data is visible.
 
 ## Remaining hardening options
 
