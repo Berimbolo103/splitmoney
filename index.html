@@ -1439,7 +1439,7 @@
           </div>
         </div>`;
       document.getElementById('first-group-btn')?.addEventListener('click', ()=>openCreate());
-      document.getElementById('join-online-btn')?.addEventListener('click', joinOnlineTrip);
+      document.getElementById('join-online-btn')?.addEventListener('click', ()=>joinOnlineTrip());
       bindAuth();
     } else {
       list.innerHTML = authHTML();
@@ -1484,7 +1484,7 @@
       list.appendChild(btns);
       document.getElementById('h-export').addEventListener('click', exportAll);
       document.getElementById('h-import').addEventListener('click', ()=>document.getElementById('h-import-file').click());
-      document.getElementById('h-join-online').addEventListener('click', joinOnlineTrip);
+      document.getElementById('h-join-online').addEventListener('click', ()=>joinOnlineTrip());
       document.getElementById('h-import-file').addEventListener('change', importAll);
     }
   }
@@ -1809,12 +1809,12 @@
 
   function shareHTML(g) {
     const online = g.remoteTripId
-      ? `<button class="btn btn-green btn-sm js-online-sync" style="font-size:13px;margin-bottom:10px;">Sync Online ${g.remoteShareCode?`(${g.remoteShareCode})`:''}</button>`
+      ? `<div class="hint" style="margin-bottom:10px;">Online trip ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
       : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online Trip</button>`;
     return `
       <div class="share-sec">
         <div class="hint">
-          💡 For live sharing, create an online trip and send the online code. Manual share/import still works as a backup.
+          💡 For live sharing, create an online trip and send the online code. After that, new expenses and payments sync automatically.
         </div>
         ${online}
         <div class="share-btn-row">
@@ -1827,7 +1827,6 @@
 
   function bindShare(g) {
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
-    document.querySelector('.js-online-sync')?.addEventListener('click', ()=>syncGroupOnline(g,false));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
     document.querySelector('.js-import')?.addEventListener('click', ()=>doImport(g.id));
     document.querySelector('.js-del-group')?.addEventListener('click', ()=>{
@@ -2057,6 +2056,11 @@
     }).catch(()=>{});
   }
 
+  function autoPublishGroupOnline(g) {
+    if (!onlineReady() || !isSignedIn() || g.remoteTripId) return;
+    publishGroupOnline(g,false).catch(()=>{});
+  }
+
   function patchExpenseArchiveOnline(g,expenseId,archivedAt) {
     if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
     db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
@@ -2209,7 +2213,8 @@
     if (!g.payments) g.payments=[];
     g.payments.push(p);
     save();
-    pushPaymentOnline(g,p);
+    if (g.remoteTripId) pushPaymentOnline(g,p);
+    else autoPublishGroupOnline(g);
     renderGroup(g);
     setTab('settle');
   }
@@ -2238,6 +2243,8 @@
           prefer:'return=minimal',
           body:{ archived_at: now },
         }).catch(()=>{});
+      } else {
+        autoPublishGroupOnline(g);
       }
       save(); renderGroup(g); setTab('expenses');
     });
@@ -2564,7 +2571,8 @@
 
     g.expenses.push(exp);
     save();
-    pushExpenseOnline(g,exp);
+    if (g.remoteTripId) pushExpenseOnline(g,exp);
+    else autoPublishGroupOnline(g);
     show('group');
     renderGroup(g);
     setTab('expenses');
