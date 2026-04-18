@@ -616,6 +616,12 @@
   const CCYS = ['CNY','SGD','USD','MYR','HKD'];
   const SYM = { CNY:'¥', SGD:'S$', USD:'$', MYR:'RM', HKD:'HK$' };
 
+  // Paste your Supabase project URL and anon public key here after creating
+  // the tables in supabase_schema.sql.
+  const SUPABASE_URL = 'https://axbxhgpmvwcpluvntzln.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4YnhoZ3BtdndjcGx1dm50emxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODkwMTcsImV4cCI6MjA5MjA2NTAxN30.Wo_5ydYIMcDu3B0rrQyOCS3MTqZGogjkofEuonFGXME';
+  const ONLINE_SYNC_MS = 10000;
+
   const SUGGESTS = {
     Food:['Breakfast','Lunch','Dinner','Dim sum','Hot pot','Street food'],
     Drinks:['Bubble tea','Coffee','Beer','Cocktails'],
@@ -638,6 +644,7 @@
   let groups = [];
   let gid = null; // active group id
   let profile = { id:null, name:'' };
+  let syncTimer = null;
 
   let wiz = { step:1, data:{} };
 
@@ -755,6 +762,95 @@
     return (group.expenses||[]).filter(e => e.archivedAt);
   }
 
+  function onlineReady() {
+    return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  }
+
+  async function db(path, opts={}) {
+    if (!onlineReady()) throw new Error('Supabase is not configured.');
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    };
+    if (opts.prefer) headers.Prefer = opts.prefer;
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/,'')}/rest/v1/${path}`, {
+      method: opts.method || 'GET',
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  function shareCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = '';
+    for (let i=0; i<6; i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  }
+
+  function remoteTripRow(g) {
+    return {
+      id: g.remoteTripId || g.id,
+      share_code: g.remoteShareCode || shareCode(),
+      name: g.name,
+      emoji: g.emoji || '',
+      base_currency: g.baseCurrency || 'CNY',
+      fx_rates: g.fxRates || {},
+      created_by_device: profile.id,
+      updated_at: new Date().toISOString(),
+      finalized_at: g.finalizedAt || null,
+    };
+  }
+
+  function remoteMemberRows(g) {
+    return (g.members||[]).map(name => ({
+      id: `${g.remoteTripId || g.id}:${name.toLowerCase()}`,
+      trip_id: g.remoteTripId || g.id,
+      name,
+      device_id: name === profile.name ? profile.id : null,
+    }));
+  }
+
+  function remoteExpenseRow(g,e) {
+    return {
+      id: e.id,
+      trip_id: g.remoteTripId || g.id,
+      category: e.category,
+      category_icon: e.categoryIcon,
+      description: e.description,
+      original_amount: e.originalAmount,
+      currency: e.currency,
+      cny_fen: e.cnyFen,
+      paid_by: e.paidBy,
+      split_among: e.splitAmong || [],
+      expense_date: e.date || today(),
+      created_by_device: e.createdByDevice || profile.id,
+      created_at: e.createdAt || new Date().toISOString(),
+      archived_at: e.archivedAt || null,
+    };
+  }
+
+  function expenseFromRemote(r) {
+    return {
+      id: r.id,
+      category: r.category,
+      categoryIcon: r.category_icon,
+      description: r.description,
+      originalAmount: r.original_amount,
+      currency: r.currency,
+      cnyFen: r.cny_fen,
+      paidBy: r.paid_by,
+      splitAmong: Array.isArray(r.split_among) ? r.split_among : [],
+      date: r.expense_date || today(),
+      createdByDevice: r.created_by_device,
+      createdAt: r.created_at,
+      archivedAt: r.archived_at || undefined,
+    };
+  }
+
   function settlement(net) {
     const cr=[], dr=[];
     for (const [n,v] of Object.entries(net)) {
@@ -810,11 +906,13 @@
           <div class="icon">✈️</div>
           <h3>No trips yet</h3>
           <p>Create a group to start tracking<br>your trip expenses together.</p>
-          <div class="mt20" style="display:flex;justify-content:center;">
+          <div class="mt20" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
             <button class="btn btn-green" id="first-group-btn" style="width:auto;padding:14px 32px;">Create a Group</button>
+            <button class="btn btn-ghost" id="join-online-btn" style="width:auto;padding:14px 24px;">Join Online</button>
           </div>
         </div>`;
       document.getElementById('first-group-btn')?.addEventListener('click', ()=>openCreate());
+      document.getElementById('join-online-btn')?.addEventListener('click', joinOnlineTrip);
     } else {
       list.innerHTML = '';
       groups.forEach(g => {
@@ -846,10 +944,12 @@
       btns.innerHTML=`
         <button class="btn btn-ghost btn-sm" id="h-export" style="flex:1;font-size:13px;">📤 Export Backup</button>
         <button class="btn btn-ghost btn-sm" id="h-import" style="flex:1;font-size:13px;">📥 Import</button>
+        <button class="btn btn-ghost btn-sm" id="h-join-online" style="flex:1;font-size:13px;">🔗 Join Online</button>
         <input type="file" id="h-import-file" accept="application/json" style="display:none;">`;
       list.appendChild(btns);
       document.getElementById('h-export').addEventListener('click', exportAll);
       document.getElementById('h-import').addEventListener('click', ()=>document.getElementById('h-import-file').click());
+      document.getElementById('h-join-online').addEventListener('click', joinOnlineTrip);
       document.getElementById('h-import-file').addEventListener('change', importAll);
     }
   }
@@ -967,7 +1067,15 @@
 
     if (cgState.editId) {
       const idx=groups.findIndex(g=>g.id===cgState.editId);
-      if (idx>=0) { obj.expenses=groups[idx].expenses; obj.createdAt=groups[idx].createdAt; groups[idx]=obj; }
+      if (idx>=0) {
+        obj.expenses=groups[idx].expenses;
+        obj.createdAt=groups[idx].createdAt;
+        obj.remoteTripId=groups[idx].remoteTripId;
+        obj.remoteShareCode=groups[idx].remoteShareCode;
+        obj.finalizedAt=groups[idx].finalizedAt;
+        groups[idx]=obj;
+        if (obj.remoteTripId) publishGroupOnline(obj,false).catch(()=>{});
+      }
     } else {
       groups.push(obj);
     }
@@ -983,6 +1091,7 @@
     renderGroup(g);
     show('group');
     setTab('expenses');
+    startAutoSync(g);
   }
 
   function getGroup() { return groups.find(x=>x.id===gid); }
@@ -1087,6 +1196,7 @@
           const item=g.expenses.find(x=>x.id===e.id);
           if (!item) return;
           item.archivedAt=new Date().toISOString();
+          patchExpenseArchiveOnline(g,e.id,item.archivedAt);
           save(); renderGroup(g); setTab('expenses');
         });
 
@@ -1094,6 +1204,7 @@
           ev.stopPropagation();
           if (confirm(`Delete "${e.description||e.category}"?`)) {
             g.expenses=g.expenses.filter(x=>x.id!==e.id);
+            deleteExpenseOnline(g,e.id);
             save(); renderGroup(g); setTab('expenses');
           }
         });
@@ -1138,12 +1249,14 @@
             const item=g.expenses.find(x=>x.id===e.id);
             if (!item) return;
             delete item.archivedAt;
+            patchExpenseArchiveOnline(g,e.id,null);
             save(); renderGroup(g); setTab('expenses');
           });
           row.querySelector('.del-btn:not(.archive-btn)').addEventListener('click', (ev)=>{
             ev.stopPropagation();
             if (confirm(`Delete "${e.description||e.category}"?`)) {
               g.expenses=g.expenses.filter(x=>x.id!==e.id);
+              deleteExpenseOnline(g,e.id);
               save(); renderGroup(g); setTab('expenses');
             }
           });
@@ -1156,11 +1269,15 @@
   }
 
   function shareHTML(g) {
+    const online = g.remoteTripId
+      ? `<button class="btn btn-green btn-sm js-online-sync" style="font-size:13px;margin-bottom:10px;">Sync Online ${g.remoteShareCode?`(${g.remoteShareCode})`:''}</button>`
+      : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online Trip</button>`;
     return `
       <div class="share-sec">
         <div class="hint">
-          💡 Each person opens this page on their phone, adds expenses, then taps <strong>Share Code</strong> to send a code via WhatsApp. The organiser imports all codes to see the full settlement.
+          💡 For live sharing, create an online trip and send the online code. Manual share/import still works as a backup.
         </div>
+        ${online}
         <div class="share-btn-row">
           <button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">📤 Share Code</button>
           <button class="btn btn-ghost btn-sm js-import" style="flex:1;font-size:13px;">📥 Import Code</button>
@@ -1170,6 +1287,8 @@
   }
 
   function bindShare(g) {
+    document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
+    document.querySelector('.js-online-sync')?.addEventListener('click', ()=>syncGroupOnline(g,false));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
     document.querySelector('.js-import')?.addEventListener('click', ()=>doImport(g.id));
     document.querySelector('.js-del-group')?.addEventListener('click', ()=>{
@@ -1178,6 +1297,160 @@
         save(); show('home'); renderHome();
       }
     });
+  }
+
+  async function publishGroupOnline(g, showAlert=true) {
+    if (!onlineReady()) {
+      alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
+      return;
+    }
+    try {
+      const row = remoteTripRow(g);
+      g.remoteTripId = row.id;
+      g.remoteShareCode = row.share_code;
+
+      await db('trips?on_conflict=id', {
+        method:'POST',
+        prefer:'resolution=merge-duplicates,return=representation',
+        body: row,
+      });
+
+      const members = remoteMemberRows(g);
+      if (members.length) {
+        await db('members?on_conflict=id', {
+          method:'POST',
+          prefer:'resolution=merge-duplicates',
+          body: members,
+        });
+      }
+
+      const expenses = (g.expenses||[]).map(e=>remoteExpenseRow(g,e));
+      if (expenses.length) {
+        await db('expenses?on_conflict=id', {
+          method:'POST',
+          prefer:'resolution=merge-duplicates',
+          body: expenses,
+        });
+      }
+
+      save();
+      renderGroup(g);
+      startAutoSync(g);
+      if (showAlert) {
+        const msg = `Online trip ready. Code: ${g.remoteShareCode}`;
+        navigator.clipboard?.writeText(g.remoteShareCode).catch(()=>{});
+        alert(`${msg}\n\nSend this code to your friends. They can tap Join Online and enter it.`);
+      }
+    } catch(err) {
+      if (showAlert) alert(`Online publish failed:\n${err.message}`);
+    }
+  }
+
+  async function syncGroupOnline(g, silent=true) {
+    if (!onlineReady() || !g.remoteTripId) {
+      if (!silent) alert('This trip is not online yet.');
+      return;
+    }
+    try {
+      const tripRows = await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}&select=*`);
+      const trip = tripRows?.[0];
+      if (!trip) throw new Error('Online trip was not found.');
+
+      const members = await db(`members?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
+      const expenses = await db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
+
+      g.name = trip.name || g.name;
+      g.emoji = trip.emoji || g.emoji;
+      g.baseCurrency = trip.base_currency || g.baseCurrency;
+      g.fxRates = trip.fx_rates || g.fxRates;
+      g.remoteShareCode = trip.share_code || g.remoteShareCode;
+      g.finalizedAt = trip.finalized_at || undefined;
+
+      const names = new Set(g.members||[]);
+      (members||[]).forEach(m=>{ if (m.name && !names.has(m.name)) { names.add(m.name); g.members.push(m.name); } });
+
+      const byId = new Map((g.expenses||[]).map(e=>[e.id,e]));
+      (expenses||[]).forEach(r=>byId.set(r.id, expenseFromRemote(r)));
+      g.expenses = [...byId.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+
+      save();
+      if (gid === g.id) renderGroup(g);
+      if (!silent) alert('Online trip synced.');
+    } catch(err) {
+      if (!silent) alert(`Online sync failed:\n${err.message}`);
+    }
+  }
+
+  async function joinOnlineTrip() {
+    if (!onlineReady()) {
+      alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
+      return;
+    }
+    const code = (prompt('Enter the online trip code:')||'').trim().toUpperCase();
+    if (!code) return;
+    try {
+      const tripRows = await db(`trips?share_code=eq.${encodeURIComponent(code)}&select=*`);
+      const trip = tripRows?.[0];
+      if (!trip) throw new Error('No online trip found for that code.');
+
+      let g = groups.find(x=>x.remoteTripId===trip.id);
+      if (!g) {
+        g = {
+          id: uid(),
+          remoteTripId: trip.id,
+          remoteShareCode: trip.share_code,
+          name: trip.name,
+          emoji: trip.emoji || '🌏',
+          members: [],
+          baseCurrency: trip.base_currency || 'CNY',
+          fxRates: trip.fx_rates || {SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93},
+          iAm: profile.name || null,
+          expenses: [],
+          createdAt: trip.created_at || new Date().toISOString(),
+        };
+        groups.push(g);
+      }
+      await syncGroupOnline(g,true);
+      save();
+      openGroup(g.id);
+    } catch(err) {
+      alert(`Join failed:\n${err.message}`);
+    }
+  }
+
+  function startAutoSync(g) {
+    if (syncTimer) {
+      clearInterval(syncTimer);
+      syncTimer = null;
+    }
+    if (!onlineReady() || !g?.remoteTripId) return;
+    syncTimer = setInterval(()=>syncGroupOnline(g,true), ONLINE_SYNC_MS);
+  }
+
+  function pushExpenseOnline(g,e) {
+    if (!onlineReady() || !g.remoteTripId) return;
+    db('expenses?on_conflict=id', {
+      method:'POST',
+      prefer:'resolution=merge-duplicates',
+      body: remoteExpenseRow(g,e),
+    }).catch(()=>{});
+  }
+
+  function patchExpenseArchiveOnline(g,expenseId,archivedAt) {
+    if (!onlineReady() || !g.remoteTripId) return;
+    db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
+      method:'PATCH',
+      prefer:'return=minimal',
+      body: { archived_at: archivedAt || null },
+    }).catch(()=>{});
+  }
+
+  function deleteExpenseOnline(g,expenseId) {
+    if (!onlineReady() || !g.remoteTripId) return;
+    db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
+      method:'DELETE',
+      prefer:'return=minimal',
+    }).catch(()=>{});
   }
 
   function renderBalances(g) {
@@ -1249,6 +1522,13 @@
       if (!confirm('Archive all active expenses as paid? This keeps them in history and clears them from balances.')) return;
       const now=new Date().toISOString();
       (g.expenses||[]).forEach(e=>{ if (!e.archivedAt) e.archivedAt=now; });
+      if (onlineReady() && g.remoteTripId) {
+        db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&archived_at=is.null`, {
+          method:'PATCH',
+          prefer:'return=minimal',
+          body:{ archived_at: now },
+        }).catch(()=>{});
+      }
       save(); renderGroup(g); setTab('expenses');
     });
   }
@@ -1567,11 +1847,13 @@
       paidBy:wiz.data.paidBy,
       splitAmong:[...wiz.data.split],
       date:wiz.data.date||today(),
+      createdByDevice:profile.id,
       createdAt:new Date().toISOString(),
     };
 
     g.expenses.push(exp);
     save();
+    pushExpenseOnline(g,exp);
     show('group');
     renderGroup(g);
     setTab('expenses');
@@ -1665,7 +1947,10 @@
     });
 
     // Group detail
-    document.getElementById('g-back').addEventListener('click', ()=>{ show('home'); renderHome(); });
+    document.getElementById('g-back').addEventListener('click', ()=>{
+      if (syncTimer) { clearInterval(syncTimer); syncTimer=null; }
+      show('home'); renderHome();
+    });
     document.getElementById('g-edit').addEventListener('click', ()=>openCreate(gid));
     document.getElementById('add-exp-btn').addEventListener('click', ()=>openWizard());
     document.querySelectorAll('.tab').forEach(t=>{
