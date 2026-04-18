@@ -39,13 +39,16 @@
     /* ── SCREENS ── */
     .screen {
       position: fixed;
-      inset: 0;
+      top: 0;
+      bottom: 0;
       background: var(--bg);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      width: 100%;
       max-width: 520px;
       left: 50%;
+      right: auto;
       transform: translateX(-50%);
     }
     .screen.hidden { display: none; }
@@ -63,7 +66,7 @@
     .hdr.green { background: var(--green); border-bottom: none; }
     .hdr.green .hdr-title, .hdr.green .hdr-sub { color: #fff; }
     .hdr.green .icon-btn { color: #fff; }
-    .hdr-title { font-size: 17px; font-weight: 700; flex: 1; }
+    .hdr-title { font-size: 17px; font-weight: 700; flex: 1; min-width: 0; }
     .hdr-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
     .icon-btn {
@@ -106,7 +109,7 @@
       color: #fff; flex-shrink: 0;
     }
     .home-hero h1 { font-size: 28px; font-weight: 800; }
-    .home-hero p { font-size: 14px; opacity: .85; margin-top: 4px; }
+    .home-hero p { font-size: 14px; opacity: .85; margin-top: 4px; line-height: 1.35; }
 
     .fab {
       position: fixed; bottom: calc(var(--sb) + 20px); right: calc(50% - 240px + 20px);
@@ -152,7 +155,7 @@
       color: #fff; flex-shrink: 0;
     }
     .group-hero-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-    .group-hero-title { font-size: 19px; font-weight: 800; flex: 1; }
+    .group-hero-title { font-size: 19px; font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .bubbles { display: flex; gap: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .bubbles::-webkit-scrollbar { display: none; }
@@ -162,7 +165,7 @@
     .my-balance-banner {
       background: rgba(0,0,0,.15); border-radius: 10px;
       padding: 10px 14px; margin-top: 12px;
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
     }
     .my-balance-banner .label { font-size: 13px; opacity: .85; }
     .my-balance-banner .amount { font-size: 18px; font-weight: 800; }
@@ -201,6 +204,7 @@
     .exp-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .exp-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
     .exp-right { text-align: right; flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+    .exp-amount { min-width: 68px; }
     .exp-total { font-size: 15px; font-weight: 700; }
     .exp-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .del-btn {
@@ -216,7 +220,7 @@
       padding: 14px 16px; display: flex; align-items: center; gap: 14px;
       border-bottom: 1px solid var(--border); background: var(--card);
     }
-    .bal-info { flex: 1; }
+    .bal-info { flex: 1; min-width: 0; }
     .bal-name { font-size: 15px; font-weight: 700; }
     .bal-detail { font-size: 12px; color: var(--muted); margin-top: 3px; }
     .bal-amount { font-size: 18px; font-weight: 800; }
@@ -226,7 +230,7 @@
       padding: 16px; display: flex; align-items: center; gap: 12px;
       border-bottom: 1px solid var(--border); background: var(--card);
     }
-    .settle-mid { flex: 1; text-align: center; }
+    .settle-mid { flex: 1; text-align: center; min-width: 0; }
     .settle-pays { font-size: 12px; color: var(--muted); }
     .settle-amount { font-size: 20px; font-weight: 800; color: var(--green); margin: 4px 0; }
 
@@ -237,7 +241,7 @@
       border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
     .wiz-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .wiz-title { font-size: 22px; font-weight: 800; flex: 1; }
+    .wiz-title { font-size: 22px; font-weight: 800; flex: 1; min-width: 0; }
     .wiz-sub { font-size: 14px; color: var(--muted); margin-top: 3px; }
     .progress { display: flex; gap: 4px; }
     .pdot { height: 4px; border-radius: 2px; background: var(--border); flex: 1; transition: background .3s; }
@@ -310,7 +314,7 @@
       border: 2px solid var(--border); cursor: pointer; transition: all .15s;
     }
     .payer-tile:active, .payer-tile.sel { border-color: var(--green); background: var(--green-light); }
-    .payer-name { font-size: 15px; font-weight: 700; }
+    .payer-name { font-size: 15px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
     /* step 5: split */
     .split-body { padding: 16px; }
@@ -352,7 +356,7 @@
       background: var(--card); cursor: pointer;
     }
     .confirm-row .cl { color: var(--muted); font-size: 13px; width: 72px; flex-shrink: 0; }
-    .confirm-row .cv { font-size: 15px; font-weight: 600; flex: 1; }
+    .confirm-row .cv { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: right; }
     .confirm-row .ca-icon { font-size: 20px; flex-shrink: 0; color: var(--muted); }
 
     .breakdown {
@@ -388,7 +392,7 @@
       background: var(--card); border-radius: var(--r-sm);
       border: 1px solid var(--border); margin-bottom: 8px;
     }
-    .mtag .mname { flex: 1; font-size: 15px; font-weight: 600; }
+    .mtag .mname { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
     .mtag .mrm {
       width: 28px; height: 28px; border: none; background: none;
       color: var(--muted); font-size: 20px; cursor: pointer;
@@ -412,6 +416,48 @@
       line-height: 1.5; margin-bottom: 12px;
     }
     .share-btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
+
+    @media (max-width: 390px) {
+      .home-hero { padding: calc(var(--st) + 16px) 16px 20px; }
+      .home-hero h1 { font-size: 24px; }
+      .hdr, .wiz-hdr { padding-left: 12px; padding-right: 12px; }
+      .icon-btn { width: 36px; height: 36px; }
+      .fab { width: 54px; height: 54px; right: 16px; bottom: calc(var(--sb) + 16px); }
+
+      .group-row, .bal-row, .settle-row { padding-left: 12px; padding-right: 12px; gap: 10px; }
+      .group-emoji { width: 46px; height: 46px; font-size: 23px; }
+      .group-balance { max-width: 86px; font-size: 11px; }
+
+      .group-hero { padding-left: 12px; padding-right: 12px; }
+      .tab { font-size: 13px; padding: 12px 4px; }
+      .my-balance-banner .amount { font-size: 16px; white-space: nowrap; }
+
+      .exp-row { padding: 12px; gap: 9px; align-items: flex-start; }
+      .exp-icon { width: 40px; height: 40px; font-size: 20px; border-radius: 10px; }
+      .exp-title { font-size: 14px; }
+      .exp-meta { font-size: 11px; line-height: 1.35; }
+      .exp-right { gap: 4px; align-items: flex-start; }
+      .exp-amount { min-width: 56px; }
+      .exp-total { font-size: 13px; }
+      .exp-sub { font-size: 10px; }
+      .del-btn { width: 28px; height: 28px; font-size: 15px; }
+
+      .cat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 12px; }
+      .payer-grid { grid-template-columns: 1fr; padding: 12px; }
+      .emoji-grid { grid-template-columns: repeat(4, 1fr); }
+      .fx-grid { grid-template-columns: 1fr; }
+      .add-member-row { gap: 8px; }
+      .add-member-row .btn { padding: 0 14px; }
+      .cg-body, .split-body, .desc-body { padding-left: 12px; padding-right: 12px; }
+
+      .amt-val { font-size: 42px; min-height: 52px; overflow-wrap: anywhere; }
+      .confirm-big .ca { font-size: 34px; overflow-wrap: anywhere; }
+      .confirm-row { padding-left: 12px; padding-right: 12px; gap: 10px; }
+      .confirm-row .cl { width: 68px; }
+      .breakdown { margin-left: 12px; margin-right: 12px; }
+      .share-sec { margin: 12px; padding: 12px; }
+      .share-btn-row { flex-direction: column; }
+    }
 
     /* ── MISC ── */
     .mt8 { margin-top: 8px; }
@@ -1028,7 +1074,7 @@
             <div class="exp-meta">Paid by <strong>${e.paidBy}</strong> · ${splitLabel}</div>
           </div>
           <div class="exp-right">
-            <div>
+            <div class="exp-amount">
               <div class="exp-total">${diff?origStr:cnyStr}</div>
               <div class="exp-sub">${diff?cnyStr:(me&&myShare?fmt(myShare,'CNY')+' ea':'')}</div>
             </div>
@@ -1079,7 +1125,7 @@
               <div class="exp-meta">Paid by <strong>${e.paidBy}</strong> · ${splitLabel} · archived</div>
             </div>
             <div class="exp-right">
-              <div>
+              <div class="exp-amount">
                 <div class="exp-total">${diff?origStr:cnyStr}</div>
                 <div class="exp-sub">${diff?cnyStr:''}</div>
               </div>
