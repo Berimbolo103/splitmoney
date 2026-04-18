@@ -104,12 +104,52 @@
 
     /* ── HOME ── */
     .home-hero {
-      background: var(--green);
-      padding: calc(var(--st) + 20px) 20px 24px;
+      background: linear-gradient(145deg, #1cc29f 0%, #0da68c 100%);
+      padding: calc(var(--st) + 20px) 20px 28px;
       color: #fff; flex-shrink: 0;
+      position: relative; overflow: hidden;
     }
-    .home-hero h1 { font-size: 28px; font-weight: 800; }
-    .home-hero p { font-size: 14px; opacity: .85; margin-top: 4px; line-height: 1.35; }
+    .home-hero::before {
+      content: ''; position: absolute; top: -60px; right: -60px;
+      width: 200px; height: 200px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); pointer-events: none; z-index: 0;
+    }
+    .home-hero::after {
+      content: ''; position: absolute; bottom: -80px; left: -50px;
+      width: 240px; height: 240px; border-radius: 50%;
+      background: rgba(255,255,255,0.05); pointer-events: none; z-index: 0;
+    }
+    .home-hero-inner {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; position: relative; z-index: 1;
+    }
+    .home-hero-left { flex: 1; min-width: 0; }
+    .home-app-label { font-size: 13px; font-weight: 600; opacity: .72; margin-bottom: 6px; letter-spacing: .2px; }
+    .home-hero h1 { font-size: 30px; font-weight: 900; letter-spacing: -.5px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .home-hero p { font-size: 13px; opacity: .78; margin-top: 8px; line-height: 1.4; }
+    .home-avatar-btn {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.35);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      cursor: pointer; flex-shrink: 0;
+      transition: transform .15s, background .15s;
+    }
+    .home-avatar-btn:active { transform: scale(.92); background: rgba(255,255,255,.32); }
+    .groups-section-hdr {
+      padding: 16px 16px 8px;
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .8px;
+    }
+    .group-card {
+      margin: 0 16px 10px; border-radius: var(--r);
+      background: var(--card); box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      overflow: hidden; cursor: pointer; transition: transform .1s, box-shadow .1s;
+    }
+    .group-card:active { transform: scale(.98); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .group-card-inner {
+      padding: 16px; display: flex; align-items: center; gap: 14px;
+    }
 
     .fab {
       position: fixed; bottom: calc(var(--sb) + 20px); right: calc(50% - 240px + 20px);
@@ -447,6 +487,8 @@
     @media (max-width: 390px) {
       .home-hero { padding: calc(var(--st) + 16px) 16px 20px; }
       .home-hero h1 { font-size: 24px; }
+      .home-avatar-btn { width: 44px; height: 44px; font-size: 15px; }
+      .group-card { margin-left: 12px; margin-right: 12px; }
       .hdr, .wiz-hdr { padding-left: 12px; padding-right: 12px; }
       .icon-btn { width: 36px; height: 36px; }
       .fab { width: 54px; height: 54px; right: 16px; bottom: calc(var(--sb) + 16px); }
@@ -507,6 +549,7 @@
       .numpad { background: #1a1a1a; }
       .confirm-row, .exp-row, .bal-row, .settle-row, .settle-card, .group-row,
       .wiz-hdr, .wiz-foot, .tab-bar, .hdr { background: #2c2c2e; }
+      .group-card { background: #2c2c2e; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
       .settle-select { background: #2c2c2e; color: #f0f0f0; border-color: #3a3a3c; }
       .settle-summary details { background: #1a1a1a; border-color: #3a3a3c; }
       .exp-icon { background: #3a3a3c; }
@@ -521,8 +564,14 @@
 <!-- ══════════════════ HOME ══════════════════ -->
 <div id="sh" class="screen">
   <div class="home-hero">
-    <h1>SplitTrip ✈️</h1>
-    <p id="hello-user">Track group expenses, settle up easily</p>
+    <div class="home-hero-inner">
+      <div class="home-hero-left">
+        <div class="home-app-label">SplitTrip ✈️</div>
+        <h1 id="home-main-title">Your Trips</h1>
+        <p id="hello-user">Track group expenses, settle up easily</p>
+      </div>
+      <button class="home-avatar-btn" id="home-avatar-btn" title="Profile">👤</button>
+    </div>
   </div>
   <div class="scroll" style="padding-bottom:80px;">
     <div id="groups-list"></div>
@@ -1117,13 +1166,7 @@
         </div>`;
     }
     if (isSignedIn()) {
-      const email = authSession.user?.email || '';
-      return `
-        <div class="auth-card">
-          <div class="auth-title">Signed in as ${profile.name || email}</div>
-          <div class="auth-sub">${email}<br>Online trips are only visible to signed-in trip members.</div>
-          <button class="btn btn-ghost btn-sm" id="auth-signout" style="font-size:13px;">Sign Out</button>
-        </div>`;
+      return '';
     }
     return `
       <div class="auth-card">
@@ -1220,13 +1263,31 @@
   }
 
   function renderHome() {
+    const avatarBtn = document.getElementById('home-avatar-btn');
+    if (avatarBtn) {
+      if (profile.name) {
+        avatarBtn.textContent = avInit(profile.name);
+        avatarBtn.style.background = avColor(profile.name);
+        avatarBtn.style.border = '2px solid rgba(255,255,255,0.4)';
+        avatarBtn.style.fontSize = '18px';
+      } else {
+        avatarBtn.textContent = '👤';
+        avatarBtn.style.background = 'rgba(255,255,255,0.2)';
+        avatarBtn.style.border = '2px solid rgba(255,255,255,0.35)';
+      }
+    }
+    const mainTitle = document.getElementById('home-main-title');
+    if (mainTitle) {
+      mainTitle.textContent = profile.name ? `Hi, ${profile.name.split(' ')[0]}! 👋` : 'Your Trips';
+    }
     const hello = document.getElementById('hello-user');
     if (hello) {
-      hello.textContent = profile.name
-        ? `Hello ${profile.name} · track group expenses, settle up easily`
-        : 'Track group expenses, settle up easily';
-      hello.title = 'Tap to change this device name';
-      hello.style.cursor = 'pointer';
+      const visCount = onlineReady() ? groups.filter(g=>g.remoteTripId).length : groups.length;
+      hello.textContent = visCount > 0
+        ? `${visCount} trip${visCount!==1?'s':''} · tap a trip to view`
+        : 'Create a trip to track your expenses';
+      hello.title = '';
+      hello.style.cursor = 'default';
     }
     const list = document.getElementById('groups-list');
     if (onlineReady() && !isSignedIn()) {
@@ -1261,6 +1322,10 @@
     } else {
       list.innerHTML = authHTML();
       bindAuth();
+      const sHdr = document.createElement('div');
+      sHdr.className = 'groups-section-hdr';
+      sHdr.textContent = 'My Trips';
+      list.appendChild(sHdr);
       visibleGroups.forEach(g => {
         const net = balances(g);
         const myNet = g.iAm ? (net[g.iAm]||0) : 0;
@@ -1272,14 +1337,16 @@
           : 'Settled up';
 
         const row = document.createElement('div');
-        row.className = 'group-row';
+        row.className = 'group-card';
         row.innerHTML = `
-          <div class="group-emoji">${g.emoji||'✈️'}</div>
-          <div class="group-info">
-            <div class="group-name">${g.name}</div>
-            <div class="group-meta">${g.members.length} people · ${activeExpenses(g).length} active · ${archivedExpenses(g).length} archived</div>
-          </div>
-          <div class="group-balance ${cls}">${txt.replace('\n','<br>')}</div>`;
+          <div class="group-card-inner">
+            <div class="group-emoji">${g.emoji||'✈️'}</div>
+            <div class="group-info">
+              <div class="group-name">${g.name}</div>
+              <div class="group-meta">${g.members.length} people · ${activeExpenses(g).length} expenses</div>
+            </div>
+            <div class="group-balance ${cls}">${txt.replace('\n','<br>')}</div>
+          </div>`;
         row.addEventListener('click', ()=>openGroup(g.id));
         list.appendChild(row);
       });
@@ -2466,7 +2533,14 @@
   function bind() {
     // Home
     document.getElementById('new-group-btn').addEventListener('click', ()=>openCreate());
-    document.getElementById('hello-user').addEventListener('click', editProfileName);
+    document.getElementById('home-avatar-btn').addEventListener('click', () => {
+      if (isSignedIn()) {
+        const email = authSession?.user?.email || '';
+        if (confirm(`Sign out of ${email || profile.name || 'your account'}?`)) signOut();
+      } else {
+        editProfileName();
+      }
+    });
 
     // Create group
     document.getElementById('cg-back').addEventListener('click', ()=>{ show('home'); renderHome(); });
