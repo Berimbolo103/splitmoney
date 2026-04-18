@@ -7,9 +7,9 @@ This app uses Supabase for online shared trips with user accounts and member-onl
 1. Open your Supabase project.
 2. Go to **Authentication > Providers**.
 3. Enable **Email**.
-4. Choose your account flow:
-   - For easiest testing, temporarily disable email confirmation.
-   - For safer real use, keep email confirmation enabled.
+4. Go to the email provider settings and turn **Confirm email** off if you want users to create accounts and sign in immediately.
+
+The app has a confirm-password field. Email verification is controlled by Supabase project settings, not by the HTML file.
 
 Each person should create their own account in the app before creating or joining an online trip.
 

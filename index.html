@@ -999,17 +999,43 @@
   }
 
   function expenseSummaryForSettlement(g,tx) {
-    return activeExpenses(g)
+    const fromOwesRows = activeExpenses(g)
       .filter(e => e.paidBy === tx.to && e.splitAmong.includes(tx.from))
       .map(e => {
         const shares = splitEvenly(e.cnyFen,e.splitAmong);
         return {
           title: e.description || e.category || 'Expense',
           date: e.date || today(),
+          paidBy: e.paidBy,
           share: shares[tx.from] || 0,
         };
       })
       .filter(x=>x.share>0);
+
+    const toOwesRows = activeExpenses(g)
+      .filter(e => e.paidBy === tx.from && e.splitAmong.includes(tx.to))
+      .map(e => {
+        const shares = splitEvenly(e.cnyFen,e.splitAmong);
+        return {
+          title: e.description || e.category || 'Expense',
+          date: e.date || today(),
+          paidBy: e.paidBy,
+          share: shares[tx.to] || 0,
+        };
+      })
+      .filter(x=>x.share>0);
+
+    const fromOwesTotal = fromOwesRows.reduce((sum,x)=>sum+x.share,0);
+    const toOwesTotal = toOwesRows.reduce((sum,x)=>sum+x.share,0);
+    const paidFromTo = (g.payments||[])
+      .filter(p=>!p.archivedAt && p.from===tx.from && p.to===tx.to)
+      .reduce((sum,p)=>sum+p.cnyFen,0);
+    const paidToFrom = (g.payments||[])
+      .filter(p=>!p.archivedAt && p.from===tx.to && p.to===tx.from)
+      .reduce((sum,p)=>sum+p.cnyFen,0);
+    const directNet = fromOwesTotal - toOwesTotal - paidFromTo + paidToFrom;
+
+    return { fromOwesRows, toOwesRows, fromOwesTotal, toOwesTotal, paidFromTo, paidToFrom, directNet };
   }
 
   function requireSignIn() {
@@ -1082,6 +1108,7 @@
           <input type="text" class="field" id="auth-name" placeholder="Display name" value="${profile.name||''}" style="font-size:15px;padding:12px;">
           <input type="email" class="field" id="auth-email" placeholder="Email" style="font-size:15px;padding:12px;">
           <input type="password" class="field" id="auth-password" placeholder="Password" style="font-size:15px;padding:12px;">
+          <input type="password" class="field" id="auth-confirm-password" placeholder="Confirm password" style="font-size:15px;padding:12px;">
         </div>
         <div class="auth-actions">
           <button class="btn btn-green btn-sm" id="auth-signin" style="flex:1;font-size:13px;">Sign In</button>
@@ -1096,18 +1123,20 @@
     document.getElementById('auth-signout')?.addEventListener('click', signOut);
   }
 
-  function authFormValues() {
+  function authFormValues(requireConfirm=false) {
     const name = (document.getElementById('auth-name')?.value || profile.name || '').trim();
     const email = (document.getElementById('auth-email')?.value || '').trim();
     const password = document.getElementById('auth-password')?.value || '';
+    const confirmPassword = document.getElementById('auth-confirm-password')?.value || '';
     if (!email || !password) throw new Error('Enter both email and password.');
     if (password.length < 6) throw new Error('Password must be at least 6 characters.');
+    if (requireConfirm && password !== confirmPassword) throw new Error('Passwords do not match.');
     return { name, email, password };
   }
 
   async function signUp() {
     try {
-      const { name, email, password } = authFormValues();
+      const { name, email, password } = authFormValues(true);
       const data = await authRequest('signup', {
         method:'POST',
         body:{ email, password, data:{ display_name:name || email.split('@')[0] } },
@@ -1119,7 +1148,7 @@
         renderHome();
         alert('Account created and signed in.');
       } else {
-        alert('Account created. Check your email to confirm your account, then sign in.');
+        alert('Account created, but Supabase still requires email confirmation. Disable email confirmation in Supabase Auth settings if you want immediate sign-in.');
       }
     } catch(err) {
       alert(`Sign up failed:\n${err.message}`);
@@ -1128,7 +1157,7 @@
 
   async function signIn() {
     try {
-      const { email, password } = authFormValues();
+      const { email, password } = authFormValues(false);
       const data = await authRequest('token?grant_type=password', {
         method:'POST',
         body:{ email, password },
@@ -1136,6 +1165,7 @@
       authSession = data;
       applyAuthProfile();
       saveAuth();
+      await loadMyOnlineTrips(true);
       renderHome();
     } catch(err) {
       alert(`Sign in failed:\n${err.message}`);
@@ -1149,6 +1179,8 @@
       }
     } catch(e) {}
     clearAuth();
+    groups=[];
+    save();
     renderHome();
   }
 
@@ -1162,7 +1194,20 @@
       hello.style.cursor = 'pointer';
     }
     const list = document.getElementById('groups-list');
-    if (!groups.length) {
+    if (onlineReady() && !isSignedIn()) {
+      list.innerHTML = `
+        ${authHTML()}
+        <div class="empty">
+          <div class="icon">🔒</div>
+          <h3>Sign in required</h3>
+          <p>Only signed-in trip members can view online trips.</p>
+        </div>`;
+      bindAuth();
+      return;
+    }
+
+    const visibleGroups = onlineReady() ? groups.filter(g=>g.remoteTripId) : groups;
+    if (!visibleGroups.length) {
       list.innerHTML = `
         ${authHTML()}
         <div class="empty">
@@ -1180,7 +1225,7 @@
     } else {
       list.innerHTML = authHTML();
       bindAuth();
-      groups.forEach(g => {
+      visibleGroups.forEach(g => {
         const net = balances(g);
         const myNet = g.iAm ? (net[g.iAm]||0) : 0;
         const cls = myNet>0?'col-green':myNet<0?'col-red':'col-muted';
@@ -1714,6 +1759,32 @@
     }
   }
 
+  async function loadMyOnlineTrips(silent=false) {
+    if (!onlineReady() || !isSignedIn()) return;
+    try {
+      const tripRows = await db('trips?select=*&order=updated_at.desc');
+      groups = (tripRows||[]).map(trip => ({
+        id: trip.id,
+        remoteTripId: trip.id,
+        remoteShareCode: trip.share_code,
+        name: trip.name,
+        emoji: trip.emoji || '🌏',
+        members: [],
+        baseCurrency: trip.base_currency || 'CNY',
+        fxRates: trip.fx_rates || {SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93},
+        iAm: profile.name || null,
+        expenses: [],
+        payments: [],
+        createdAt: trip.created_at || new Date().toISOString(),
+        finalizedAt: trip.finalized_at || undefined,
+      }));
+      await Promise.all(groups.map(g=>syncGroupOnline(g,true)));
+      save();
+    } catch(err) {
+      if (!silent) alert(`Could not load your online trips:\n${err.message}`);
+    }
+  }
+
   function startAutoSync(g) {
     if (syncTimer) {
       clearInterval(syncTimer);
@@ -1799,13 +1870,33 @@
       const toAv=av(tx.to,'av-md');
       const sgd = fromCny(tx.amt,'SGD',g.fxRates);
       const summary = expenseSummaryForSettlement(g,tx);
-      const summaryRows = summary.length
-        ? summary.map(x=>`
-          <div class="settle-summary-row">
-            <span><strong>${x.title}</strong><br>${fmtDate(x.date)}</span>
-            <span>${fmt(x.share,'CNY')} / ${fmt(fromCny(x.share,'SGD',g.fxRates),'SGD')}</span>
-          </div>`).join('')
-        : `<div class="settle-summary-row"><span>This settlement is from the net total across group expenses, including offsets from what ${tx.from} already paid.</span></div>`;
+      const owedRows = summary.fromOwesRows.map(x=>`
+        <div class="settle-summary-row">
+          <span><strong>${x.paidBy}</strong> paid for ${x.title}<br>${fmtDate(x.date)} · ${tx.from}'s share</span>
+          <span>${fmt(x.share,'CNY')} / ${fmt(fromCny(x.share,'SGD',g.fxRates),'SGD')}</span>
+        </div>`).join('');
+      const offsetRows = summary.toOwesRows.map(x=>`
+        <div class="settle-summary-row">
+          <span><strong>${x.paidBy}</strong> paid for ${x.title}<br>${fmtDate(x.date)} · ${tx.to}'s share, offset</span>
+          <span>-${fmt(x.share,'CNY')}</span>
+        </div>`).join('');
+      const paymentRows = `
+        ${summary.paidFromTo?`<div class="settle-summary-row"><span>Already paid by ${tx.from} to ${tx.to}</span><span>-${fmt(summary.paidFromTo,'CNY')}</span></div>`:''}
+        ${summary.paidToFrom?`<div class="settle-summary-row"><span>Already paid by ${tx.to} to ${tx.from}</span><span>+${fmt(summary.paidToFrom,'CNY')}</span></div>`:''}`;
+      const equation = `
+        <div class="settle-summary-row">
+          <span><strong>Calculation</strong><br>
+            ${tx.from}'s share of ${tx.to}'s expenses ${fmt(summary.fromOwesTotal,'CNY')}
+            - ${tx.to}'s share of ${tx.from}'s expenses ${fmt(summary.toOwesTotal,'CNY')}
+            ${summary.paidFromTo?`- paid ${fmt(summary.paidFromTo,'CNY')}`:''}
+            ${summary.paidToFrom?`+ reverse paid ${fmt(summary.paidToFrom,'CNY')}`:''}
+          </span>
+          <span><strong>${fmt(summary.directNet,'CNY')}</strong></span>
+        </div>
+        ${Math.abs(summary.directNet - tx.amt) > 1 ? `<div class="settle-summary-row"><span>This row is ${fmt(tx.amt,'CNY')} because the app minimizes payments across the whole group, not only this pair.</span></div>` : ''}`;
+      const summaryRows = owedRows || offsetRows || paymentRows.trim()
+        ? `${owedRows}${offsetRows}${paymentRows}${equation}`
+        : `<div class="settle-summary-row"><span>This settlement comes from the net total across all group expenses and previous payments.</span></div>`;
       row.innerHTML=`
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
           ${fromAv.outerHTML}
@@ -2343,9 +2434,13 @@
   load();
   loadProfile();
   loadAuth();
+  if (onlineReady() && isSignedIn()) groups = [];
   ensureProfileName();
   bind();
   renderHome();
+  if (onlineReady() && isSignedIn()) {
+    loadMyOnlineTrips(true).then(()=>renderHome());
+  }
   show('home');
 })();
 </script>
