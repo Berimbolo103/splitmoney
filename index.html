@@ -230,9 +230,27 @@
       padding: 16px; display: flex; align-items: center; gap: 12px;
       border-bottom: 1px solid var(--border); background: var(--card);
     }
+    .settle-card { border-bottom: 1px solid var(--border); background: var(--card); }
+    .settle-card .settle-row { border-bottom: none; }
     .settle-mid { flex: 1; text-align: center; min-width: 0; }
     .settle-pays { font-size: 12px; color: var(--muted); }
     .settle-amount { font-size: 20px; font-weight: 800; color: var(--green); margin: 4px 0; }
+    .settle-actions { padding: 0 16px 14px; display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .settle-select {
+      min-height: 40px; border-radius: var(--r-sm); border: 1.5px solid var(--border);
+      background: var(--card); color: var(--text); padding: 0 10px; font: inherit; font-weight: 700;
+    }
+    .settle-summary { padding: 0 16px 14px; }
+    .settle-summary details {
+      border: 1px solid var(--border); border-radius: var(--r-sm);
+      padding: 10px 12px; background: var(--bg);
+    }
+    .settle-summary summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text); }
+    .settle-summary-row {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding-top: 8px; font-size: 12px; color: var(--muted);
+    }
+    .settle-summary-row strong { color: var(--text); font-weight: 700; }
 
     /* ── WIZARD ── */
     #sw { z-index: 100; }
@@ -417,6 +435,15 @@
     }
     .share-btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
 
+    .auth-card {
+      margin: 16px; padding: 16px; background: var(--card);
+      border-radius: var(--r); border: 1px solid var(--border);
+    }
+    .auth-title { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
+    .auth-sub { font-size: 13px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
+    .auth-grid { display: grid; gap: 8px; }
+    .auth-actions { display: flex; gap: 8px; margin-top: 10px; }
+
     @media (max-width: 390px) {
       .home-hero { padding: calc(var(--st) + 16px) 16px 20px; }
       .home-hero h1 { font-size: 24px; }
@@ -457,6 +484,8 @@
       .breakdown { margin-left: 12px; margin-right: 12px; }
       .share-sec { margin: 12px; padding: 12px; }
       .share-btn-row { flex-direction: column; }
+      .auth-card { margin: 12px; padding: 12px; }
+      .auth-actions { flex-direction: column; }
     }
 
     /* ── MISC ── */
@@ -472,12 +501,14 @@
         --green-light: rgba(28,194,159,.15);
       }
       .nk, .cat-tile, .payer-tile, .chip, .ccy-chip, .mtag,
-      .field, .share-sec, .em-opt { background: #2c2c2e; color: #f0f0f0; }
+      .field, .share-sec, .auth-card, .em-opt { background: #2c2c2e; color: #f0f0f0; }
       .nk.dim { background: #1c1c1e; }
       .nk:active { background: #3a3a3c; }
       .numpad { background: #1a1a1a; }
-      .confirm-row, .exp-row, .bal-row, .settle-row, .group-row,
+      .confirm-row, .exp-row, .bal-row, .settle-row, .settle-card, .group-row,
       .wiz-hdr, .wiz-foot, .tab-bar, .hdr { background: #2c2c2e; }
+      .settle-select { background: #2c2c2e; color: #f0f0f0; border-color: #3a3a3c; }
+      .settle-summary details { background: #1a1a1a; border-color: #3a3a3c; }
       .exp-icon { background: #3a3a3c; }
       .cat-tile.sel, .payer-tile.sel { background: rgba(28,194,159,.2); }
       .confirm-big { background: #2c2c2e; }
@@ -644,6 +675,7 @@
   let groups = [];
   let gid = null; // active group id
   let profile = { id:null, name:'' };
+  let authSession = null;
   let syncTimer = null;
 
   let wiz = { step:1, data:{} };
@@ -665,6 +697,20 @@
   }
   function saveProfile() {
     try { localStorage.setItem('splittrip_profile_v1', JSON.stringify(profile)); } catch(e){}
+  }
+  function saveAuth() {
+    try { localStorage.setItem('splittrip_auth_v1', JSON.stringify(authSession)); } catch(e){}
+  }
+  function loadAuth() {
+    try {
+      const r = localStorage.getItem('splittrip_auth_v1');
+      if (r) authSession = JSON.parse(r);
+    } catch(e) { authSession = null; }
+    applyAuthProfile();
+  }
+  function clearAuth() {
+    authSession = null;
+    try { localStorage.removeItem('splittrip_auth_v1'); } catch(e){}
   }
   function loadProfile() {
     try {
@@ -691,6 +737,14 @@
     profile.name = name;
     saveProfile();
     renderHome();
+  }
+  function applyAuthProfile() {
+    const user = authSession?.user;
+    if (!user) return;
+    const name = user.user_metadata?.display_name || user.email?.split('@')[0] || profile.name;
+    if (name) profile.name = name;
+    profile.authUserId = user.id;
+    saveProfile();
   }
 
   // ── HELPERS ──
@@ -735,6 +789,12 @@
     return Math.round((minor/100)*rate*100);
   }
 
+  function fromCny(cnyFen, ccy, fx) {
+    if (ccy === 'CNY') return cnyFen;
+    const rate = fx?.[ccy] || 1;
+    return Math.round((cnyFen/100)/rate*100);
+  }
+
   function splitEvenly(total, members) {
     const n = members.length;
     if (!n) return {};
@@ -753,6 +813,11 @@
       const shares = splitEvenly(e.cnyFen, e.splitAmong);
       e.splitAmong.forEach(m => { net[m] = (net[m]||0) - (shares[m]||0); });
     });
+    (group.payments||[]).forEach(p => {
+      if (p.archivedAt) return;
+      net[p.from] = (net[p.from]||0) + p.cnyFen;
+      net[p.to] = (net[p.to]||0) - p.cnyFen;
+    });
     return net;
   }
   function activeExpenses(group) {
@@ -766,13 +831,53 @@
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   }
 
+  function isSignedIn() {
+    return Boolean(authSession?.access_token && authSession?.user?.id);
+  }
+
+  function authHeaders(extra={}) {
+    return {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${authSession?.access_token || SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      ...extra,
+    };
+  }
+
+  async function authRequest(path, opts={}) {
+    if (!onlineReady()) throw new Error('Supabase is not configured.');
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/,'')}/auth/v1/${path}`, {
+      method: opts.method || 'GET',
+      headers: authHeaders(opts.headers || {}),
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new Error(data?.msg || data?.error_description || data?.message || text || 'Auth request failed.');
+    return data;
+  }
+
+  async function refreshSessionIfNeeded() {
+    if (!authSession?.refresh_token) return;
+    const expiresAt = (authSession.expires_at || 0) * 1000;
+    if (expiresAt && Date.now() < expiresAt - 60000) return;
+    try {
+      const data = await authRequest('token?grant_type=refresh_token', {
+        method:'POST',
+        body:{ refresh_token: authSession.refresh_token },
+      });
+      authSession = data;
+      applyAuthProfile();
+      saveAuth();
+    } catch(e) {
+      clearAuth();
+    }
+  }
+
   async function db(path, opts={}) {
     if (!onlineReady()) throw new Error('Supabase is not configured.');
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-    };
+    await refreshSessionIfNeeded();
+    const headers = authHeaders();
     if (opts.prefer) headers.Prefer = opts.prefer;
     const res = await fetch(`${SUPABASE_URL.replace(/\/$/,'')}/rest/v1/${path}`, {
       method: opts.method || 'GET',
@@ -801,8 +906,18 @@
       base_currency: g.baseCurrency || 'CNY',
       fx_rates: g.fxRates || {},
       created_by_device: profile.id,
+      created_by_user: authSession?.user?.id || null,
       updated_at: new Date().toISOString(),
       finalized_at: g.finalizedAt || null,
+    };
+  }
+
+  function remoteTripMemberRow(g) {
+    return {
+      trip_id: g.remoteTripId || g.id,
+      user_id: authSession?.user?.id,
+      display_name: profile.name || authSession?.user?.email?.split('@')[0] || 'Member',
+      role: 'member',
     };
   }
 
@@ -812,6 +927,7 @@
       trip_id: g.remoteTripId || g.id,
       name,
       device_id: name === profile.name ? profile.id : null,
+      created_by_user: authSession?.user?.id || null,
     }));
   }
 
@@ -829,6 +945,7 @@
       split_among: e.splitAmong || [],
       expense_date: e.date || today(),
       created_by_device: e.createdByDevice || profile.id,
+      created_by_user: e.createdByUser || authSession?.user?.id || null,
       created_at: e.createdAt || new Date().toISOString(),
       archived_at: e.archivedAt || null,
     };
@@ -850,6 +967,55 @@
       createdAt: r.created_at,
       archivedAt: r.archived_at || undefined,
     };
+  }
+
+  function remotePaymentRow(g,p) {
+    return {
+      id: p.id,
+      trip_id: g.remoteTripId || g.id,
+      from_name: p.from,
+      to_name: p.to,
+      cny_fen: p.cnyFen,
+      paid_currency: p.paidCurrency || 'CNY',
+      paid_amount: p.paidAmount || p.cnyFen,
+      created_by_user: p.createdByUser || authSession?.user?.id || null,
+      created_at: p.createdAt || new Date().toISOString(),
+      archived_at: p.archivedAt || null,
+    };
+  }
+
+  function paymentFromRemote(r) {
+    return {
+      id: r.id,
+      from: r.from_name,
+      to: r.to_name,
+      cnyFen: r.cny_fen,
+      paidCurrency: r.paid_currency || 'CNY',
+      paidAmount: r.paid_amount || r.cny_fen,
+      createdByUser: r.created_by_user,
+      createdAt: r.created_at,
+      archivedAt: r.archived_at || undefined,
+    };
+  }
+
+  function expenseSummaryForSettlement(g,tx) {
+    return activeExpenses(g)
+      .filter(e => e.paidBy === tx.to && e.splitAmong.includes(tx.from))
+      .map(e => {
+        const shares = splitEvenly(e.cnyFen,e.splitAmong);
+        return {
+          title: e.description || e.category || 'Expense',
+          date: e.date || today(),
+          share: shares[tx.from] || 0,
+        };
+      })
+      .filter(x=>x.share>0);
+  }
+
+  function requireSignIn() {
+    if (isSignedIn()) return true;
+    alert('Please sign in first. Online trips are private to signed-in trip members.');
+    return false;
   }
 
   function settlement(net) {
@@ -891,6 +1057,101 @@
   }
 
   // ── HOME ──
+  function authHTML() {
+    if (!onlineReady()) {
+      return `
+        <div class="auth-card">
+          <div class="auth-title">Online accounts disabled</div>
+          <div class="auth-sub">Add your Supabase URL and anon key in the app file to enable private online trips.</div>
+        </div>`;
+    }
+    if (isSignedIn()) {
+      const email = authSession.user?.email || '';
+      return `
+        <div class="auth-card">
+          <div class="auth-title">Signed in as ${profile.name || email}</div>
+          <div class="auth-sub">${email}<br>Online trips are only visible to signed-in trip members.</div>
+          <button class="btn btn-ghost btn-sm" id="auth-signout" style="font-size:13px;">Sign Out</button>
+        </div>`;
+    }
+    return `
+      <div class="auth-card">
+        <div class="auth-title">Sign in for private online trips</div>
+        <div class="auth-sub">Create an account or sign in before creating or joining an online trip.</div>
+        <div class="auth-grid">
+          <input type="text" class="field" id="auth-name" placeholder="Display name" value="${profile.name||''}" style="font-size:15px;padding:12px;">
+          <input type="email" class="field" id="auth-email" placeholder="Email" style="font-size:15px;padding:12px;">
+          <input type="password" class="field" id="auth-password" placeholder="Password" style="font-size:15px;padding:12px;">
+        </div>
+        <div class="auth-actions">
+          <button class="btn btn-green btn-sm" id="auth-signin" style="flex:1;font-size:13px;">Sign In</button>
+          <button class="btn btn-ghost btn-sm" id="auth-signup" style="flex:1;font-size:13px;">Create Account</button>
+        </div>
+      </div>`;
+  }
+
+  function bindAuth() {
+    document.getElementById('auth-signin')?.addEventListener('click', signIn);
+    document.getElementById('auth-signup')?.addEventListener('click', signUp);
+    document.getElementById('auth-signout')?.addEventListener('click', signOut);
+  }
+
+  function authFormValues() {
+    const name = (document.getElementById('auth-name')?.value || profile.name || '').trim();
+    const email = (document.getElementById('auth-email')?.value || '').trim();
+    const password = document.getElementById('auth-password')?.value || '';
+    if (!email || !password) throw new Error('Enter both email and password.');
+    if (password.length < 6) throw new Error('Password must be at least 6 characters.');
+    return { name, email, password };
+  }
+
+  async function signUp() {
+    try {
+      const { name, email, password } = authFormValues();
+      const data = await authRequest('signup', {
+        method:'POST',
+        body:{ email, password, data:{ display_name:name || email.split('@')[0] } },
+      });
+      if (data?.access_token) {
+        authSession = data;
+        applyAuthProfile();
+        saveAuth();
+        renderHome();
+        alert('Account created and signed in.');
+      } else {
+        alert('Account created. Check your email to confirm your account, then sign in.');
+      }
+    } catch(err) {
+      alert(`Sign up failed:\n${err.message}`);
+    }
+  }
+
+  async function signIn() {
+    try {
+      const { email, password } = authFormValues();
+      const data = await authRequest('token?grant_type=password', {
+        method:'POST',
+        body:{ email, password },
+      });
+      authSession = data;
+      applyAuthProfile();
+      saveAuth();
+      renderHome();
+    } catch(err) {
+      alert(`Sign in failed:\n${err.message}`);
+    }
+  }
+
+  async function signOut() {
+    try {
+      if (authSession?.access_token) {
+        await authRequest('logout', { method:'POST' });
+      }
+    } catch(e) {}
+    clearAuth();
+    renderHome();
+  }
+
   function renderHome() {
     const hello = document.getElementById('hello-user');
     if (hello) {
@@ -903,6 +1164,7 @@
     const list = document.getElementById('groups-list');
     if (!groups.length) {
       list.innerHTML = `
+        ${authHTML()}
         <div class="empty">
           <div class="icon">✈️</div>
           <h3>No trips yet</h3>
@@ -914,8 +1176,10 @@
         </div>`;
       document.getElementById('first-group-btn')?.addEventListener('click', ()=>openCreate());
       document.getElementById('join-online-btn')?.addEventListener('click', joinOnlineTrip);
+      bindAuth();
     } else {
-      list.innerHTML = '';
+      list.innerHTML = authHTML();
+      bindAuth();
       groups.forEach(g => {
         const net = balances(g);
         const myNet = g.iAm ? (net[g.iAm]||0) : 0;
@@ -1070,6 +1334,7 @@
       const idx=groups.findIndex(g=>g.id===cgState.editId);
       if (idx>=0) {
         obj.expenses=groups[idx].expenses;
+        obj.payments=groups[idx].payments||[];
         obj.createdAt=groups[idx].createdAt;
         obj.remoteTripId=groups[idx].remoteTripId;
         obj.remoteShareCode=groups[idx].remoteShareCode;
@@ -1305,6 +1570,7 @@
       alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
       return;
     }
+    if (!requireSignIn()) return;
     try {
       const row = remoteTripRow(g);
       g.remoteTripId = row.id;
@@ -1312,8 +1578,14 @@
 
       await db('trips?on_conflict=id', {
         method:'POST',
-        prefer:'resolution=merge-duplicates,return=representation',
+        prefer:'resolution=merge-duplicates',
         body: row,
+      });
+
+      await db('trip_members?on_conflict=trip_id,user_id', {
+        method:'POST',
+        prefer:'resolution=merge-duplicates',
+        body: remoteTripMemberRow(g),
       });
 
       const members = remoteMemberRows(g);
@@ -1331,6 +1603,15 @@
           method:'POST',
           prefer:'resolution=merge-duplicates',
           body: expenses,
+        });
+      }
+
+      const payments = (g.payments||[]).map(p=>remotePaymentRow(g,p));
+      if (payments.length) {
+        await db('payments?on_conflict=id', {
+          method:'POST',
+          prefer:'resolution=merge-duplicates',
+          body: payments,
         });
       }
 
@@ -1352,6 +1633,10 @@
       if (!silent) alert('This trip is not online yet.');
       return;
     }
+    if (!isSignedIn()) {
+      if (!silent) alert('Please sign in first.');
+      return;
+    }
     try {
       const tripRows = await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}&select=*`);
       const trip = tripRows?.[0];
@@ -1359,6 +1644,7 @@
 
       const members = await db(`members?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
       const expenses = await db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
+      const payments = await db(`payments?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
 
       g.name = trip.name || g.name;
       g.emoji = trip.emoji || g.emoji;
@@ -1374,6 +1660,10 @@
       (expenses||[]).forEach(r=>byId.set(r.id, expenseFromRemote(r)));
       g.expenses = [...byId.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
 
+      const paymentsById = new Map((g.payments||[]).map(p=>[p.id,p]));
+      (payments||[]).forEach(r=>paymentsById.set(r.id, paymentFromRemote(r)));
+      g.payments = [...paymentsById.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+
       save();
       if (gid === g.id) renderGroup(g);
       if (!silent) alert('Online trip synced.');
@@ -1387,10 +1677,14 @@
       alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
       return;
     }
+    if (!requireSignIn()) return;
     const code = (prompt('Enter the online trip code:')||'').trim().toUpperCase();
     if (!code) return;
     try {
-      const tripRows = await db(`trips?share_code=eq.${encodeURIComponent(code)}&select=*`);
+      const tripRows = await db('rpc/join_trip_by_code', {
+        method:'POST',
+        body:{ p_share_code:code, p_display_name:profile.name || authSession.user.email?.split('@')[0] || 'Member' },
+      });
       const trip = tripRows?.[0];
       if (!trip) throw new Error('No online trip found for that code.');
 
@@ -1407,6 +1701,7 @@
           fxRates: trip.fx_rates || {SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93},
           iAm: profile.name || null,
           expenses: [],
+          payments: [],
           createdAt: trip.created_at || new Date().toISOString(),
         };
         groups.push(g);
@@ -1429,7 +1724,7 @@
   }
 
   function pushExpenseOnline(g,e) {
-    if (!onlineReady() || !g.remoteTripId) return;
+    if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
     db('expenses?on_conflict=id', {
       method:'POST',
       prefer:'resolution=merge-duplicates',
@@ -1438,7 +1733,7 @@
   }
 
   function patchExpenseArchiveOnline(g,expenseId,archivedAt) {
-    if (!onlineReady() || !g.remoteTripId) return;
+    if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
     db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
       method:'PATCH',
       prefer:'return=minimal',
@@ -1447,10 +1742,19 @@
   }
 
   function deleteExpenseOnline(g,expenseId) {
-    if (!onlineReady() || !g.remoteTripId) return;
+    if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
     db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
       method:'DELETE',
       prefer:'return=minimal',
+    }).catch(()=>{});
+  }
+
+  function pushPaymentOnline(g,p) {
+    if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
+    db('payments?on_conflict=id', {
+      method:'POST',
+      prefer:'resolution=merge-duplicates',
+      body: remotePaymentRow(g,p),
     }).catch(()=>{});
   }
 
@@ -1470,7 +1774,7 @@
       row.innerHTML+=`
         <div class="bal-info">
           <div class="bal-name">${name}</div>
-          <div class="bal-detail">${label}</div>
+          <div class="bal-detail">${label} · ${fmt(fromCny(Math.abs(v),'SGD',g.fxRates),'SGD')}</div>
         </div>
         <div class="bal-amount" style="color:${col};">${v===0?'🎉':fmt(Math.abs(v),'CNY')}</div>`;
       c.appendChild(row);
@@ -1489,9 +1793,19 @@
     }
     c.innerHTML=`<div class="day-hdr">Minimum payments to settle up</div>`;
     txs.forEach(tx=>{
+      const card=document.createElement('div'); card.className='settle-card';
       const row=document.createElement('div'); row.className='settle-row';
       const fromAv=av(tx.from,'av-md');
       const toAv=av(tx.to,'av-md');
+      const sgd = fromCny(tx.amt,'SGD',g.fxRates);
+      const summary = expenseSummaryForSettlement(g,tx);
+      const summaryRows = summary.length
+        ? summary.map(x=>`
+          <div class="settle-summary-row">
+            <span><strong>${x.title}</strong><br>${fmtDate(x.date)}</span>
+            <span>${fmt(x.share,'CNY')} / ${fmt(fromCny(x.share,'SGD',g.fxRates),'SGD')}</span>
+          </div>`).join('')
+        : `<div class="settle-summary-row"><span>This settlement is from the net total across group expenses, including offsets from what ${tx.from} already paid.</span></div>`;
       row.innerHTML=`
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
           ${fromAv.outerHTML}
@@ -1500,15 +1814,59 @@
         <div class="settle-mid">
           <div class="settle-pays">pays</div>
           <div class="settle-amount">${fmt(tx.amt,'CNY')}</div>
+          <div class="settle-pays">or ${fmt(sgd,'SGD')}</div>
           <div class="settle-pays">to</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
           ${toAv.outerHTML}
           <div style="font-size:11px;color:var(--muted);">${tx.to}</div>
         </div>`;
-      c.appendChild(row);
+      card.appendChild(row);
+      const actions=document.createElement('div');
+      actions.className='settle-actions';
+      actions.innerHTML=`
+        <select class="settle-select">
+          <option value="CNY">Pay in RMB (${fmt(tx.amt,'CNY')})</option>
+          <option value="SGD">Pay in SGD (${fmt(sgd,'SGD')})</option>
+        </select>
+        <button class="btn btn-green btn-sm js-paid" style="width:auto;font-size:13px;">Paid</button>`;
+      card.appendChild(actions);
+      const summaryEl=document.createElement('div');
+      summaryEl.className='settle-summary';
+      summaryEl.innerHTML=`
+        <details>
+          <summary>What is ${tx.from} paying ${tx.to} for?</summary>
+          ${summaryRows}
+        </details>`;
+      card.appendChild(summaryEl);
+      actions.querySelector('.js-paid').addEventListener('click', ()=>{
+        const paidCurrency=actions.querySelector('.settle-select').value;
+        markSettlementPaid(g,tx,paidCurrency);
+      });
+      c.appendChild(card);
     });
     addArchiveSettledButton(c,g);
+  }
+
+  function markSettlementPaid(g,tx,paidCurrency) {
+    const paidAmount = fromCny(tx.amt,paidCurrency,g.fxRates);
+    if (!confirm(`Mark ${tx.from} paid ${tx.to} ${fmt(paidAmount,paidCurrency)}?`)) return;
+    const p={
+      id:uid(),
+      from:tx.from,
+      to:tx.to,
+      cnyFen:tx.amt,
+      paidCurrency,
+      paidAmount,
+      createdByUser:authSession?.user?.id || null,
+      createdAt:new Date().toISOString(),
+    };
+    if (!g.payments) g.payments=[];
+    g.payments.push(p);
+    save();
+    pushPaymentOnline(g,p);
+    renderGroup(g);
+    setTab('settle');
   }
 
   function addArchiveSettledButton(container,g) {
@@ -1523,8 +1881,14 @@
       if (!confirm('Archive all active expenses as paid? This keeps them in history and clears them from balances.')) return;
       const now=new Date().toISOString();
       (g.expenses||[]).forEach(e=>{ if (!e.archivedAt) e.archivedAt=now; });
-      if (onlineReady() && g.remoteTripId) {
+      (g.payments||[]).forEach(p=>{ if (!p.archivedAt) p.archivedAt=now; });
+      if (onlineReady() && g.remoteTripId && isSignedIn()) {
         db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&archived_at=is.null`, {
+          method:'PATCH',
+          prefer:'return=minimal',
+          body:{ archived_at: now },
+        }).catch(()=>{});
+        db(`payments?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&archived_at=is.null`, {
           method:'PATCH',
           prefer:'return=minimal',
           body:{ archived_at: now },
@@ -1849,6 +2213,7 @@
       splitAmong:[...wiz.data.split],
       date:wiz.data.date||today(),
       createdByDevice:profile.id,
+      createdByUser:authSession?.user?.id || null,
       createdAt:new Date().toISOString(),
     };
 
@@ -1885,11 +2250,15 @@
       const existing=new Set(target.expenses.map(e=>e.id));
       const added=(p.g.expenses||[]).filter(e=>!existing.has(e.id));
       target.expenses.push(...added);
+      if (!target.payments) target.payments=[];
+      const existingPayments=new Set(target.payments.map(p=>p.id));
+      const addedPayments=(p.g.payments||[]).filter(p=>!existingPayments.has(p.id));
+      target.payments.push(...addedPayments);
       const exMbr=new Set(target.members);
       (p.g.members||[]).filter(m=>!exMbr.has(m)).forEach(m=>target.members.push(m));
       save();
       renderGroup(target);
-      alert(`✅ Imported ${added.length} new expense${added.length!==1?'s':''}!`);
+      alert(`✅ Imported ${added.length} new expense${added.length!==1?'s':''} and ${addedPayments.length} payment${addedPayments.length!==1?'s':''}!`);
     } catch(e) { alert('Invalid code. Please try again.'); }
   }
 
@@ -1914,6 +2283,9 @@
               const t=groups.find(x=>x.id===g.id);
               const ex=new Set(t.expenses.map(e=>e.id));
               t.expenses.push(...(g.expenses||[]).filter(e=>!ex.has(e.id)));
+              if (!t.payments) t.payments=[];
+              const pay=new Set(t.payments.map(p=>p.id));
+              t.payments.push(...(g.payments||[]).filter(p=>!pay.has(p.id)));
             } else { groups.push(g); }
           });
           save(); renderHome();
@@ -1970,6 +2342,7 @@
   // ── INIT ──
   load();
   loadProfile();
+  loadAuth();
   ensureProfileName();
   bind();
   renderHome();
