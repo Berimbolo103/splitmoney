@@ -1106,6 +1106,7 @@
       expense_date: e.date || today(),
       created_by_device: e.createdByDevice || profile.id,
       created_by_user: e.createdByUser || authSession?.user?.id || null,
+      inputted_by: e.inputtedBy || profile.name || null,
       created_at: e.createdAt || new Date().toISOString(),
       archived_at: e.archivedAt || null,
     };
@@ -1124,6 +1125,7 @@
       splitAmong: Array.isArray(r.split_among) ? r.split_among : [],
       date: r.expense_date || today(),
       createdByDevice: r.created_by_device,
+      inputtedBy: r.inputted_by || null,
       createdAt: r.created_at,
       archivedAt: r.archived_at || undefined,
     };
@@ -1719,7 +1721,7 @@
           <div class="exp-icon">${e.categoryIcon||'📦'}</div>
           <div class="exp-info">
             <div class="exp-title">${e.description||e.category}</div>
-            <div class="exp-meta">Paid by <strong>${e.paidBy}</strong> · ${splitLabel}</div>
+            <div class="exp-meta">Paid by <strong>${e.paidBy}</strong> · ${splitLabel}${e.inputtedBy ? ` · <span style="opacity:0.6">by ${e.inputtedBy}</span>` : ''}</div>
           </div>
           <div class="exp-right">
             <div class="exp-amount">
@@ -2566,6 +2568,7 @@
       date:wiz.data.date||today(),
       createdByDevice:profile.id,
       createdByUser:authSession?.user?.id || null,
+      inputtedBy:profile.name || null,
       createdAt:new Date().toISOString(),
     };
 

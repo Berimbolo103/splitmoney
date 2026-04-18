@@ -58,6 +58,7 @@ create table if not exists public.expenses (
   expense_date date,
   created_by_device text,
   created_by_user uuid references auth.users(id) on delete set null,
+  inputted_by text,
   created_at timestamptz not null default now(),
   archived_at timestamptz
 );
@@ -78,6 +79,7 @@ create table if not exists public.payments (
 alter table public.trips add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.members add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.expenses add column if not exists created_by_user uuid references auth.users(id) on delete set null;
+alter table public.expenses add column if not exists inputted_by text;
 
 create index if not exists trips_share_code_idx on public.trips(share_code);
 create index if not exists trip_members_trip_id_idx on public.trip_members(trip_id);
