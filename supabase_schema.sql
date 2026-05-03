@@ -12,6 +12,7 @@ create table if not exists public.trips (
   share_code text not null unique,
   name text not null,
   emoji text,
+  cover_photo text,
   base_currency text not null default 'CNY',
   fx_rates jsonb not null default '{}'::jsonb,
   created_by_device text,
@@ -27,6 +28,10 @@ create table if not exists public.trip_members (
   user_id uuid not null references auth.users(id) on delete cascade,
   display_name text not null,
   role text not null default 'member',
+  status text not null default 'pending' check (status in ('pending','approved','declined')),
+  requested_at timestamptz not null default now(),
+  responded_at timestamptz,
+  responded_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (trip_id, user_id)
 );
@@ -77,9 +82,36 @@ create table if not exists public.payments (
 );
 
 alter table public.trips add column if not exists created_by_user uuid references auth.users(id) on delete set null;
+alter table public.trips add column if not exists cover_photo text;
+alter table public.trip_members add column if not exists status text not null default 'pending';
+alter table public.trip_members add column if not exists requested_at timestamptz not null default now();
+alter table public.trip_members add column if not exists responded_at timestamptz;
+alter table public.trip_members add column if not exists responded_by uuid references auth.users(id) on delete set null;
 alter table public.members add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.expenses add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.expenses add column if not exists inputted_by text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'trip_members_status_check'
+      and conrelid = 'public.trip_members'::regclass
+  ) then
+    alter table public.trip_members
+      add constraint trip_members_status_check
+      check (status in ('pending','approved','declined'));
+  end if;
+end;
+$$;
+
+-- Preserve access for trips created before approval states existed.
+update public.trip_members
+set status = 'approved',
+    responded_at = coalesce(responded_at, now()),
+    responded_by = coalesce(responded_by, user_id)
+where status is null or status = 'pending';
 
 create index if not exists trips_share_code_idx on public.trips(share_code);
 create index if not exists trip_members_trip_id_idx on public.trip_members(trip_id);
@@ -95,6 +127,30 @@ alter table public.trip_members enable row level security;
 alter table public.members enable row level security;
 alter table public.expenses enable row level security;
 alter table public.payments enable row level security;
+
+-- Public bucket for uploaded trip cover photos.
+insert into storage.buckets (id, name, public)
+values ('trip-covers', 'trip-covers', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "splittrip public read trip covers" on storage.objects;
+create policy "splittrip public read trip covers"
+on storage.objects for select
+to public
+using (bucket_id = 'trip-covers');
+
+drop policy if exists "splittrip authenticated upload trip covers" on storage.objects;
+create policy "splittrip authenticated upload trip covers"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'trip-covers');
+
+drop policy if exists "splittrip authenticated update trip covers" on storage.objects;
+create policy "splittrip authenticated update trip covers"
+on storage.objects for update
+to authenticated
+using (bucket_id = 'trip-covers')
+with check (bucket_id = 'trip-covers');
 
 -- Remove the earlier simple anonymous policies if you already ran the old file.
 drop policy if exists "splittrip anon read trips" on public.trips;
@@ -119,10 +175,13 @@ as $$
     from public.trip_members tm
     where tm.trip_id = p_trip_id
       and tm.user_id = auth.uid()
+      and tm.status = 'approved'
   );
 $$;
 
 grant execute on function public.is_trip_member(text) to authenticated;
+
+drop function if exists public.is_trip_owner(text) cascade;
 
 -- Create a trip and the creator membership together. A direct insert into
 -- trips cannot satisfy member-only RLS yet because the creator is not a member
@@ -203,10 +262,15 @@ begin
     returning * into v_trip;
   end if;
 
-  insert into public.trip_members (trip_id, user_id, display_name, role)
-  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'member')
+  insert into public.trip_members (trip_id, user_id, display_name, role, status, responded_at, responded_by)
+  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'member', 'approved', now(), auth.uid())
   on conflict (trip_id, user_id)
-  do update set display_name = excluded.display_name;
+  do update set
+    display_name = excluded.display_name,
+    role = 'member',
+    status = 'approved',
+    responded_at = now(),
+    responded_by = auth.uid();
 
   return query
   select
@@ -258,17 +322,20 @@ to authenticated
 using (public.is_trip_member(trip_id));
 
 drop policy if exists "splittrip users add own trip_membership" on public.trip_members;
-create policy "splittrip users add own trip_membership"
+drop policy if exists "splittrip no direct trip_membership insert" on public.trip_members;
+create policy "splittrip no direct trip_membership insert"
 on public.trip_members for insert
 to authenticated
-with check (user_id = auth.uid());
+with check (false);
 
 drop policy if exists "splittrip users update own trip_membership" on public.trip_members;
-create policy "splittrip users update own trip_membership"
+drop policy if exists "splittrip users update own pending display name" on public.trip_members;
+drop policy if exists "splittrip no direct trip_membership update" on public.trip_members;
+create policy "splittrip no direct trip_membership update"
 on public.trip_members for update
 to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
+using (false)
+with check (false);
 
 drop policy if exists "splittrip users delete own trip_membership" on public.trip_members;
 create policy "splittrip users delete own trip_membership"
@@ -354,8 +421,8 @@ on public.payments for delete
 to authenticated
 using (public.is_trip_member(trip_id));
 
--- Join by invite code. This is needed because trip rows are member-only,
--- so non-members cannot directly select a trip by share_code.
+-- Join by invite code. Users who know the code become approved members.
+drop function if exists public.join_trip_by_code(text, text);
 create or replace function public.join_trip_by_code(
   p_share_code text,
   p_display_name text
@@ -365,6 +432,7 @@ returns table (
   share_code text,
   name text,
   emoji text,
+  cover_photo text,
   base_currency text,
   fx_rates jsonb,
   created_at timestamptz,
@@ -386,10 +454,23 @@ begin
     raise exception 'No trip found for that code';
   end if;
 
-  insert into public.trip_members (trip_id, user_id, display_name)
-  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'))
+  insert into public.trip_members (trip_id, user_id, display_name, role, status, requested_at, responded_at, responded_by)
+  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'member', 'approved', now(), now(), auth.uid())
   on conflict (trip_id, user_id)
-  do update set display_name = excluded.display_name;
+  do update set
+    display_name = excluded.display_name,
+    status = 'approved',
+    responded_at = now(),
+    responded_by = auth.uid();
+
+  insert into public.members (id, trip_id, name, created_by_user)
+  values (
+    v_trip.id || ':' || lower(regexp_replace(coalesce(nullif(trim(p_display_name), ''), 'Member'), '\s+', '-', 'g')),
+    v_trip.id,
+    coalesce(nullif(trim(p_display_name), ''), 'Member'),
+    auth.uid()
+  )
+  on conflict (trip_id, name) do nothing;
 
   return query
   select
@@ -397,6 +478,7 @@ begin
     v_trip.share_code,
     v_trip.name,
     v_trip.emoji,
+    v_trip.cover_photo,
     v_trip.base_currency,
     v_trip.fx_rates,
     v_trip.created_at,
@@ -405,3 +487,4 @@ end;
 $$;
 
 grant execute on function public.join_trip_by_code(text, text) to authenticated;
+drop function if exists public.respond_trip_join_request(text, uuid, text);
