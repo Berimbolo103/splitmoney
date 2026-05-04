@@ -2705,6 +2705,21 @@
       color: var(--accent-ink);
       opacity: .72;
     }
+    /* Remove the desktop phone-frame shadow that darkened as the page scrolled. */
+    body {
+      background: var(--bg) !important;
+    }
+    .screen {
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+    .st-content,
+    .st-home-main,
+    .st-group-main {
+      background: var(--bg) !important;
+    }
   </style>
 </head>
 <body>
@@ -5058,14 +5073,9 @@
   }
 
   function defaultMahjongPot(members) {
-    const sorted = [...members].sort();
     return {
-      winnerLeg: sorted[0] ? [sorted[0]] : [],
-      winnerAmountStr: '',
-      loserLegs: [1,2,3].map(i => ({
-        members: sorted[i] ? [sorted[i]] : [],
-        amountStr: '',
-      })),
+      winnerLegs: [{ members: [], amountStr: '' }],
+      loserLegs: [{ members: [], amountStr: '' }],
     };
   }
 
@@ -5106,16 +5116,20 @@
   function mahjongWizardReview(g) {
     const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
     const potRows = mjWizard.pots.map((pot,i) => {
+      const winnerTotal = (pot.winnerLegs || []).reduce((sum,leg)=>sum+parseAmt(leg.amountStr || ''),0);
       const loserTotal = (pot.loserLegs || []).reduce((sum,leg)=>sum+parseAmt(leg.amountStr || ''),0);
-      const winnerTotal = parseAmt(pot.winnerAmountStr || '') || loserTotal;
+      const winners = (pot.winnerLegs || [])
+        .filter(leg => leg.members?.length && parseAmt(leg.amountStr || ''))
+        .map(leg => `${leg.members.join(' + ')} ${fmt(parseAmt(leg.amountStr || ''),ccy)}`)
+        .join('; ');
       const losers = (pot.loserLegs || [])
         .filter(leg => leg.members?.length && parseAmt(leg.amountStr || ''))
         .map(leg => `${leg.members.join(' + ')} ${fmt(parseAmt(leg.amountStr || ''),ccy)}`)
         .join('; ');
       return `
         <div class="mj-review-row">
-          <span>Pot ${i+1}: <strong>${esc((pot.winnerLeg || []).join(' + '))}</strong> wins<br>${esc(losers)}</span>
-          <strong class="num">${fmt(winnerTotal,ccy)}</strong>
+          <span>Pot ${i+1}: <strong>Wins</strong> ${esc(winners || 'none')}<br><strong>Losses</strong> ${esc(losers || 'none')}</span>
+          <strong class="num">${fmt(Math.max(winnerTotal, loserTotal),ccy)}</strong>
         </div>`;
     }).join('');
     const mealAmount = parseAmt(mjWizard.meal.amountStr || '');
@@ -5164,10 +5178,21 @@
     } else if (step <= mjWizard.potCount) {
       const pot = mjWizard.pots[step-1] || defaultMahjongPot(members);
       mjWizard.pots[step-1] = pot;
-      if (!Array.isArray(pot.winnerLeg)) pot.winnerLeg = pot.winner ? [pot.winner] : [];
+      if (!Array.isArray(pot.winnerLegs)) pot.winnerLegs = [{ members: pot.winnerLeg || (pot.winner ? [pot.winner] : []), amountStr: pot.winnerAmountStr || '' }];
       if (!Array.isArray(pot.loserLegs)) pot.loserLegs = [{ members: pot.loser ? [pot.loser] : [], amountStr: pot.loserAmountStr || '' }];
-      const winnerChips = members.map(n=>`
-        <button class="mj-chip ${pot.winnerLeg.includes(n)?'winner':''}" type="button" data-mj-winner-leg="${esc(n)}">${esc(n)}</button>`).join('');
+      const winnerLegs = pot.winnerLegs.map((leg,legIndex) => {
+        const legChips = members.map(n=>`
+          <button class="mj-chip ${leg.members.includes(n)?'winner':''}" type="button" data-mj-winner-leg="${legIndex}" data-mj-win-member="${esc(n)}">${esc(n)}</button>`).join('');
+        return `
+          <div class="mj-card" style="box-shadow:none;margin:0 0 10px;padding:12px;background:var(--surface-2);">
+            <div class="mj-card-title" style="margin-bottom:8px;">Winning leg ${legIndex+1}</div>
+            <div class="mj-chip-row">${legChips}</div>
+            <div class="mj-field" style="margin-bottom:0;">
+              <label>How much did this leg win? (${esc(ccy)})</label>
+              <input data-mj-win-amount="${legIndex}" inputmode="decimal" placeholder="0.00" value="${esc(leg.amountStr || '')}">
+            </div>
+          </div>`;
+      }).join('');
       const loserLegs = pot.loserLegs.map((leg,legIndex) => {
         const legChips = members.map(n=>`
           <button class="mj-chip ${leg.members.includes(n)?'loser':''}" type="button" data-mj-loser-leg="${legIndex}" data-mj-leg-member="${esc(n)}">${esc(n)}</button>`).join('');
@@ -5182,11 +5207,11 @@
           </div>`;
       }).join('');
       body = `
-        <div class="sec-label">Winning leg (player + partners, max 4)</div>
-        <div class="mj-chip-row">${winnerChips}</div>
-        <div class="mj-field">
-          <label>How much did the winning leg win? (${esc(ccy)})</label>
-          <input id="mj-w-win-amt" inputmode="decimal" placeholder="Must equal losing legs total" value="${esc(pot.winnerAmountStr || '')}">
+        <div class="sec-label">Winning legs</div>
+        ${winnerLegs}
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="btn btn-ghost btn-sm" id="mj-add-win-leg" type="button" style="width:auto;">Add winning leg</button>
+          <button class="btn btn-ghost btn-sm" id="mj-remove-win-leg" type="button" style="width:auto;">Remove win leg</button>
         </div>
         <div class="sec-label">Losing legs</div>
         ${loserLegs}
@@ -5194,7 +5219,7 @@
           <button class="btn btn-ghost btn-sm" id="mj-add-leg" type="button" style="width:auto;">Add losing leg</button>
           <button class="btn btn-ghost btn-sm" id="mj-remove-leg" type="button" style="width:auto;">Remove leg</button>
         </div>
-        <div class="hint">Each leg can be one player plus up to 3 partners. The winning amount must match the sum of all losing legs.</div>`;
+        <div class="hint">Each leg can be one player plus up to 3 partners. A person can only be in one leg. Winner totals must match loser totals. Leave both sides empty for a no-score pot.</div>`;
     } else if (step !== finalStep) {
       const meal = mjWizard.meal;
       const splitChips = members.map(n=>`
@@ -5235,14 +5260,18 @@
       document.getElementById('mj-w-include-meal')?.addEventListener('change', e=>{ mjWizard.includeMeal = e.target.checked; });
     } else if (step <= mjWizard.potCount) {
       const pot = mjWizard.pots[step-1];
-      document.getElementById('mj-w-win-amt')?.addEventListener('input', e=>{ pot.winnerAmountStr = e.target.value; });
       c.querySelectorAll('[data-mj-winner-leg]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
-          const name = btn.dataset.mjWinnerLeg;
-          pot.winnerLeg = pot.winnerLeg.includes(name)
-            ? pot.winnerLeg.filter(x=>x!==name)
-            : [...pot.winnerLeg, name].slice(0,4);
-          pot.loserLegs.forEach(leg => { leg.members = leg.members.filter(x=>x!==name); });
+          const leg = pot.winnerLegs[parseInt(btn.dataset.mjWinnerLeg,10)];
+          const name = btn.dataset.mjWinMember;
+          if (!leg) return;
+          leg.members = leg.members.includes(name)
+            ? leg.members.filter(x=>x!==name)
+            : [...leg.members, name].slice(0,4);
+          pot.winnerLegs.forEach(other => {
+            if (other !== leg) other.members = other.members.filter(x=>x!==name);
+          });
+          pot.loserLegs.forEach(other => { other.members = other.members.filter(x=>x!==name); });
           renderMahjongWizard(g);
         });
       });
@@ -5254,7 +5283,7 @@
           leg.members = leg.members.includes(name)
             ? leg.members.filter(x=>x!==name)
             : [...leg.members, name].slice(0,4);
-          pot.winnerLeg = pot.winnerLeg.filter(x=>x!==name);
+          pot.winnerLegs.forEach(other => { other.members = other.members.filter(x=>x!==name); });
           pot.loserLegs.forEach(other => {
             if (other !== leg) other.members = other.members.filter(x=>x!==name);
           });
@@ -5266,6 +5295,22 @@
           const leg = pot.loserLegs[parseInt(e.target.dataset.mjLegAmount,10)];
           if (leg) leg.amountStr = e.target.value;
         });
+      });
+      c.querySelectorAll('[data-mj-win-amount]').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const leg = pot.winnerLegs[parseInt(e.target.dataset.mjWinAmount,10)];
+          if (leg) leg.amountStr = e.target.value;
+        });
+      });
+      document.getElementById('mj-add-win-leg')?.addEventListener('click', ()=>{
+        if (pot.winnerLegs.length >= 4) return alert('A pot can have up to 4 winning legs.');
+        pot.winnerLegs.push({ members:[], amountStr:'' });
+        renderMahjongWizard(g);
+      });
+      document.getElementById('mj-remove-win-leg')?.addEventListener('click', ()=>{
+        if (pot.winnerLegs.length <= 1) return alert('Keep at least one winning leg.');
+        pot.winnerLegs.pop();
+        renderMahjongWizard(g);
       });
       document.getElementById('mj-add-leg')?.addEventListener('click', ()=>{
         if (pot.loserLegs.length >= 4) return alert('A pot can have up to 4 losing legs.');
@@ -5300,11 +5345,26 @@
   }
 
   function validateMahjongPot(g,pot,index) {
-    if (!pot.winnerLeg?.length) throw new Error(`Pick the winning leg for pot ${index+1}.`);
-    if (pot.winnerLeg.length > 4) throw new Error(`Pot ${index+1}: a leg can have at most 4 people.`);
-    const used = new Set(pot.winnerLeg);
+    const used = new Set();
+    const activeWinnerLegs = (pot.winnerLegs || []).filter(leg => leg.members?.length || parseAmt(leg.amountStr || ''));
     const activeLoserLegs = (pot.loserLegs || []).filter(leg => leg.members?.length || parseAmt(leg.amountStr || ''));
-    if (!activeLoserLegs.length) throw new Error(`Add at least one losing leg for pot ${index+1}.`);
+    if (!activeWinnerLegs.length && !activeLoserLegs.length) {
+      return { winnerTotal:0, loserTotal:0, activeWinnerLegs:[], activeLoserLegs:[] };
+    }
+    if (!activeWinnerLegs.length) throw new Error(`Add at least one winning leg for pot ${index+1}, or leave both sides empty.`);
+    if (!activeLoserLegs.length) throw new Error(`Add at least one losing leg for pot ${index+1}, or leave both sides empty.`);
+    let winnerTotal = 0;
+    activeWinnerLegs.forEach((leg,legIndex) => {
+      if (!leg.members?.length) throw new Error(`Pot ${index+1}, winning leg ${legIndex+1}: pick who shares this leg.`);
+      if (leg.members.length > 4) throw new Error(`Pot ${index+1}, winning leg ${legIndex+1}: a leg can have at most 4 people.`);
+      const amount = parseAmt(leg.amountStr || '');
+      if (!amount) throw new Error(`Pot ${index+1}, winning leg ${legIndex+1}: enter how much this leg won.`);
+      leg.members.forEach(name => {
+        if (used.has(name)) throw new Error(`Pot ${index+1}: ${name} is selected in more than one leg.`);
+        used.add(name);
+      });
+      winnerTotal += amount;
+    });
     let loserTotal = 0;
     activeLoserLegs.forEach((leg,legIndex) => {
       if (!leg.members?.length) throw new Error(`Pot ${index+1}, losing leg ${legIndex+1}: pick who shares this leg.`);
@@ -5317,10 +5377,8 @@
       });
       loserTotal += amount;
     });
-    const winnerAmount = parseAmt(pot.winnerAmountStr || '') || loserTotal;
-    if (winnerAmount !== loserTotal) throw new Error(`Pot ${index+1}: winning amount ${fmt(winnerAmount,g?.baseCurrency || DEFAULT_BASE_CURRENCY)} must equal losing legs total ${fmt(loserTotal,g?.baseCurrency || DEFAULT_BASE_CURRENCY)}.`);
-    pot.winnerAmountStr = (winnerAmount / 100).toFixed(2).replace(/\.00$/,'');
-    return { winnerAmount, loserTotal, activeLoserLegs };
+    if (winnerTotal !== loserTotal) throw new Error(`Pot ${index+1}: winning legs total ${fmt(winnerTotal,g?.baseCurrency || DEFAULT_BASE_CURRENCY)} must equal losing legs total ${fmt(loserTotal,g?.baseCurrency || DEFAULT_BASE_CURRENCY)}.`);
+    return { winnerTotal, loserTotal, activeWinnerLegs, activeLoserLegs };
   }
 
   function advanceMahjongWizard(g) {
@@ -5370,14 +5428,16 @@
 
   function createMahjongPotExpenses(g,pot,index,ccy) {
     const validation = validateMahjongPot(g,pot,index);
+    if (!validation.winnerTotal && !validation.loserTotal) return [];
     const net = {};
-    (pot.winnerLeg || []).forEach(name => { net[name] = (net[name] || 0) + 0; });
     validation.activeLoserLegs.forEach(leg => {
       const shares = splitEvenly(parseAmt(leg.amountStr || ''), leg.members);
       leg.members.forEach(name => { net[name] = (net[name] || 0) - (shares[name] || 0); });
     });
-    const winnerShares = splitEvenly(validation.winnerAmount, pot.winnerLeg);
-    pot.winnerLeg.forEach(name => { net[name] = (net[name] || 0) + (winnerShares[name] || 0); });
+    validation.activeWinnerLegs.forEach(leg => {
+      const shares = splitEvenly(parseAmt(leg.amountStr || ''), leg.members);
+      leg.members.forEach(name => { net[name] = (net[name] || 0) + (shares[name] || 0); });
+    });
     return settlement(net).map(tx => createMahjongExpense(
       g,
       tx.from,
@@ -5393,6 +5453,10 @@
       const exps = mjWizard.pots.flatMap((pot,index) => createMahjongPotExpenses(g,pot,index,ccy));
       if (mjWizard.includeMeal) exps.push(createMealExpense(g, mjWizard.meal));
       mjWizard.open = false;
+      if (!exps.length) {
+        renderMahjong(g);
+        return;
+      }
       saveMahjongExpenses(g, exps);
     } catch(err) {
       alert(err.message);
@@ -5415,11 +5479,6 @@
     const billEntries = mahjongBillEntries(g);
     const mealTotal = billEntries.filter(e=>e.source === 'meal').reduce((s,e)=>s+(e.cnyFen||0),0);
     const total = billEntries.reduce((s,e)=>s+(e.cnyFen||0),0);
-    const options = members.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    const chips = members.map(n=>`
-      <button class="mj-chip ${mjLosers.has(n)?'loser':''}" type="button" data-mj-loser="${esc(n)}">${esc(n)}</button>`).join('');
-    const winChips = members.map(n=>`
-      <button class="mj-chip ${mjWinners.has(n)?'winner':''}" type="button" data-mj-winner="${esc(n)}">${esc(n)}</button>`).join('');
     const rows = entries.length ? entries.map(e=>{
       const from = e.splitAmong?.[0] || '';
       const to = e.paidBy || '';
@@ -5453,32 +5512,8 @@
 
         <div class="mj-card">
           <div class="mj-card-title">Guided Mahjong bill</div>
-          <div class="hint" style="margin-bottom:12px;">Use this for a full session: how many pots, winner/loser per pot, and optional meal money.</div>
+          <div class="hint" style="margin-bottom:12px;">Use this for a full session: pots, multiple winning/losing legs, partners, and optional meal money.</div>
           <button class="btn btn-green" id="mj-start-wizard" type="button">＋ Add Mahjong bill</button>
-        </div>
-
-        <div class="mj-card">
-          <div class="mj-card-title">Single transfer</div>
-          <div class="mj-grid-2">
-            <div class="mj-field"><label>Loser pays</label><select id="mj-single-from">${options}</select></div>
-            <div class="mj-field"><label>Winner receives</label><select id="mj-single-to">${options}</select></div>
-          </div>
-          <div class="mj-field"><label>Amount (${esc(g.baseCurrency || DEFAULT_BASE_CURRENCY)})</label><input id="mj-single-amt" inputmode="decimal" placeholder="0.00"></div>
-          <button class="btn btn-green" id="mj-add-single" type="button">Add transfer</button>
-        </div>
-
-        <div class="mj-card">
-          <div class="mj-card-title">Multi-split pot</div>
-          <div class="hint" style="margin-bottom:12px;">Split one total pot across multiple losers and winners with exact cents.</div>
-          <div class="mj-field"><label>Total amount (${esc(g.baseCurrency || DEFAULT_BASE_CURRENCY)})</label><input id="mj-multi-amt" inputmode="decimal" placeholder="0.00"></div>
-          <div class="sec-label">Losers</div>
-          <div class="mj-chip-row">${chips}</div>
-          <div class="sec-label">Winners</div>
-          <div class="mj-chip-row">${winChips}</div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-green" id="mj-add-multi" type="button">Add multi-split</button>
-            <button class="btn btn-ghost btn-sm" id="mj-reset" type="button" style="width:auto;">Reset</button>
-          </div>
         </div>
 
         <div class="mj-card">
@@ -5487,54 +5522,7 @@
         </div>
       </div>`;
 
-    const fromSel = document.getElementById('mj-single-from');
-    const toSel = document.getElementById('mj-single-to');
-    if (fromSel && toSel && members.length > 1) toSel.value = members.find(n=>n!==fromSel.value) || members[0];
-    document.getElementById('mj-add-single')?.addEventListener('click', ()=>{
-      const from = fromSel?.value;
-      const to = toSel?.value;
-      const minor = parseAmt(document.getElementById('mj-single-amt')?.value || '');
-      if (!from || !to) return alert('Add at least two players first.');
-      if (from === to) return alert('Loser and winner must be different people.');
-      if (!minor) return alert('Enter a valid amount.');
-      const cnyFen = toCny(minor, g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates);
-      saveMahjongExpenses(g, [createMahjongExpense(g, from, to, cnyFen, `Mahjong: ${from} pays ${to}`)]);
-    });
     document.getElementById('mj-start-wizard')?.addEventListener('click', ()=>startMahjongWizard(g));
-    c.querySelectorAll('[data-mj-loser]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const n = btn.dataset.mjLoser;
-        mjLosers.has(n) ? mjLosers.delete(n) : mjLosers.add(n);
-        if (mjLosers.has(n)) mjWinners.delete(n);
-        renderMahjong(g);
-      });
-    });
-    c.querySelectorAll('[data-mj-winner]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const n = btn.dataset.mjWinner;
-        mjWinners.has(n) ? mjWinners.delete(n) : mjWinners.add(n);
-        if (mjWinners.has(n)) mjLosers.delete(n);
-        renderMahjong(g);
-      });
-    });
-    document.getElementById('mj-reset')?.addEventListener('click', ()=>{
-      mjLosers = new Set();
-      mjWinners = new Set();
-      renderMahjong(g);
-    });
-    document.getElementById('mj-add-multi')?.addEventListener('click', ()=>{
-      const minor = parseAmt(document.getElementById('mj-multi-amt')?.value || '');
-      const losers = [...mjLosers].filter(n=>members.includes(n));
-      const winners = [...mjWinners].filter(n=>members.includes(n));
-      if (!minor) return alert('Enter a valid total amount.');
-      if (!losers.length) return alert('Pick at least one loser.');
-      if (!winners.length) return alert('Pick at least one winner.');
-      const cnyFen = toCny(minor, g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates);
-      const exps = addMahjongMulti(g, cnyFen, losers, winners);
-      mjLosers = new Set();
-      mjWinners = new Set();
-      saveMahjongExpenses(g, exps);
-    });
     c.querySelectorAll('.del-mj-exp').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const exp = g.expenses.find(e=>e.id===btn.dataset.id);
