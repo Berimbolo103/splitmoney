@@ -506,6 +506,19 @@
     .auth-sub { font-size: 13px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
     .auth-grid { display: grid; gap: 8px; }
     .auth-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .auth-divider {
+      display: flex; align-items: center; gap: 10px;
+      margin: 14px 0 10px; color: var(--muted); font-size: 12px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .08em;
+    }
+    .auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+    .auth-provider-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .auth-provider {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      border-radius: 14px; padding: 11px 8px; font-size: 13px; font-weight: 900;
+      cursor: pointer; box-shadow: var(--sh-1);
+    }
+    .auth-provider:hover { transform: translateY(-1px); }
 
     @media (max-width: 390px) {
       .home-hero { padding: calc(var(--st) + 16px) 16px 20px; }
@@ -3121,13 +3134,9 @@
         </select>
       </label>
       <label class="settings-field">
-        <span>Default base currency</span>
-        <select id="pref-base-currency" class="field">
+        <span>Main currency</span>
+        <select id="pref-base-currency" class="field" disabled>
           <option value="SGD">S$ SGD</option>
-          <option value="CNY">¥ CNY</option>
-          <option value="USD">$ USD</option>
-          <option value="MYR">RM MYR</option>
-          <option value="HKD">HK$ HKD</option>
         </select>
       </label>
     </div>
@@ -3175,6 +3184,7 @@
   const CCYS = ['CNY','SGD','USD','MYR','HKD'];
   const SYM = { CNY:'¥', SGD:'S$', USD:'$', MYR:'RM', HKD:'HK$' };
   const DEFAULT_BASE_CURRENCY = 'SGD';
+  const MAIN_CURRENCY = 'SGD';
   const DEFAULT_FX_RATES = { SGD:5.40, USD:7.25, MYR:1.60, HKD:0.93 };
   const STORAGE_KEYS = {
     travel: 'splittrip.travel.groups',
@@ -3258,6 +3268,11 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4YnhoZ3BtdndjcGx1dm50emxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODkwMTcsImV4cCI6MjA5MjA2NTAxN30.Wo_5ydYIMcDu3B0rrQyOCS3MTqZGogjkofEuonFGXME';
   const ONLINE_SYNC_MS = 10000;
   const COVER_BUCKET = 'trip-covers';
+  const AUTH_PROVIDERS = {
+    google: 'Google',
+    facebook: 'Facebook',
+    apple: 'Apple',
+  };
 
   const TRIP_SUGGESTS = {
     Food:['Breakfast','Lunch','Dinner','Dim sum','Hot pot','Street food'],
@@ -3532,7 +3547,8 @@
   function applyAuthProfile() {
     const user = authSession?.user;
     if (!user) return;
-    const name = user.user_metadata?.display_name || user.email?.split('@')[0] || profile.name;
+    const meta = user.user_metadata || {};
+    const name = meta.display_name || meta.full_name || meta.name || user.email?.split('@')[0] || profile.name;
     if (name) profile.name = name;
     profile.authUserId = user.id;
     saveProfile();
@@ -3748,7 +3764,7 @@
   }
 
   function displayCurrency(g) {
-    return g?.baseCurrency || appPrefs.baseCurrency || DEFAULT_BASE_CURRENCY;
+    return MAIN_CURRENCY;
   }
 
   function displayMinor(cnyFen, g) {
@@ -3762,6 +3778,26 @@
   function moneyFmtInCurrency(cnyFen, g, ccy) {
     const target = CCYS.includes(ccy) ? ccy : displayCurrency(g);
     return fmt(fromCny(cnyFen || 0, target, { ...DEFAULT_FX_RATES, ...(g?.fxRates || {}) }), target);
+  }
+
+  function sgdFmt(cnyFen, g) {
+    return moneyFmtInCurrency(cnyFen || 0, g, MAIN_CURRENCY);
+  }
+
+  function originalExpenseFmt(e) {
+    return fmt(e?.originalAmount || 0, e?.currency || MAIN_CURRENCY);
+  }
+
+  function expenseAmountHTML(e, g, fallbackSub='') {
+    const ccy = e?.currency || MAIN_CURRENCY;
+    if (ccy === MAIN_CURRENCY) {
+      return `
+        <div class="exp-total">${originalExpenseFmt(e)}</div>
+        <div class="exp-sub">${fallbackSub || ''}</div>`;
+    }
+    return `
+      <div class="exp-total">${originalExpenseFmt(e)}</div>
+      <div class="exp-sub">&asymp; ${sgdFmt(e?.cnyFen || 0, g)}</div>`;
   }
 
   function signedDisplayMoney(cnyFen, g) {
@@ -3829,6 +3865,61 @@
     const data = text ? JSON.parse(text) : null;
     if (!res.ok) throw new Error(data?.msg || data?.error_description || data?.message || text || 'Auth request failed.');
     return data;
+  }
+
+  function authRedirectUrl() {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    return url.toString();
+  }
+
+  function cleanAuthUrl() {
+    if (!history.replaceState) return;
+    const url = new URL(window.location.href);
+    url.hash = '';
+    history.replaceState(null, document.title, url.toString());
+  }
+
+  async function restoreOAuthSessionFromUrl() {
+    const hash = window.location.hash ? window.location.hash.slice(1) : '';
+    if (!hash) return false;
+    const params = new URLSearchParams(hash);
+    const error = params.get('error_description') || params.get('error');
+    if (error) {
+      cleanAuthUrl();
+      alert(`Social sign in failed:\n${error}`);
+      return false;
+    }
+    const accessToken = params.get('access_token');
+    if (!accessToken) return false;
+
+    const expiresIn = Number(params.get('expires_in') || 0);
+    const expiresAt = Number(params.get('expires_at') || 0)
+      || (expiresIn ? Math.floor(Date.now() / 1000) + expiresIn : 0);
+
+    authSession = {
+      access_token: accessToken,
+      refresh_token: params.get('refresh_token') || '',
+      token_type: params.get('token_type') || 'bearer',
+      expires_in: expiresIn || undefined,
+      expires_at: expiresAt || undefined,
+      provider_token: params.get('provider_token') || undefined,
+      provider_refresh_token: params.get('provider_refresh_token') || undefined,
+    };
+
+    try {
+      const data = await authRequest('user');
+      authSession.user = data?.user || data;
+      applyAuthProfile();
+      saveAuth();
+      cleanAuthUrl();
+      return true;
+    } catch(err) {
+      clearAuth();
+      cleanAuthUrl();
+      alert(`Social sign in completed, but the account could not be loaded:\n${err.message}`);
+      return false;
+    }
   }
 
   async function refreshSessionIfNeeded() {
@@ -4348,6 +4439,16 @@
   }
 
   // ── HOME ──
+  function authProviderHTML() {
+    return `
+      <div class="auth-divider">or continue with</div>
+      <div class="auth-provider-grid">
+        ${Object.entries(AUTH_PROVIDERS).map(([provider,label]) => `
+          <button class="auth-provider" type="button" data-auth-provider="${esc(provider)}">${esc(label)}</button>
+        `).join('')}
+      </div>`;
+  }
+
   function authHTML() {
     const itemName = currentApp ? appConfig().itemName : 'split';
     const itemPlural = currentApp ? appConfig().itemPlural : 'splits';
@@ -4376,6 +4477,7 @@
             <button class="btn btn-green" id="auth-signup">Create account →</button>
             <button class="btn btn-ghost" id="auth-show-signin">Sign in</button>
           </div>
+          ${authProviderHTML()}
         </div>`;
     }
     return `
@@ -4390,6 +4492,7 @@
           <button class="btn btn-green" id="auth-signin">Sign in →</button>
           <button class="btn btn-ghost" id="auth-show-signup">Create account</button>
         </div>
+        ${authProviderHTML()}
       </div>`;
   }
 
@@ -4404,6 +4507,9 @@
     });
     document.querySelectorAll('#auth-username,#auth-signin-password').forEach(el => {
       el.addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+    });
+    document.querySelectorAll('[data-auth-provider]').forEach(el => {
+      el.addEventListener('click', () => signInWithProvider(el.dataset.authProvider));
     });
   }
 
@@ -4494,6 +4600,18 @@
     } catch(err) {
       alert(`Sign up failed:\n${err.message}`);
     }
+  }
+
+  function signInWithProvider(provider) {
+    if (!AUTH_PROVIDERS[provider]) return;
+    if (!onlineReady()) {
+      alert('Supabase is not configured yet.');
+      return;
+    }
+    const url = new URL(`${SUPABASE_URL.replace(/\/$/,'')}/auth/v1/authorize`);
+    url.searchParams.set('provider', provider);
+    url.searchParams.set('redirect_to', authRedirectUrl());
+    window.location.assign(url.toString());
   }
 
   async function signIn() {
@@ -4693,7 +4811,7 @@
       cgState = {
         editId, kind:groupKind(grp), emoji:grp.emoji||'🌏',
         members:[...(grp.members||[])],
-        baseCcy:grp.baseCurrency||DEFAULT_BASE_CURRENCY,
+        baseCcy:MAIN_CURRENCY,
         fx:{...DEFAULT_FX_RATES, ...grp.fxRates},
         iAm:grp.iAm||null,
         coverPhoto:grp.coverPhoto||null,
@@ -4705,7 +4823,7 @@
       const t = appConfig(createKind);
       cgState = {
         editId:null, kind:createKind, emoji:t.emoji, members:[],
-        baseCcy:appPrefs.baseCurrency || DEFAULT_BASE_CURRENCY, fx:{...DEFAULT_FX_RATES}, iAm:profile.name||null, coverPhoto:null, coverUpload:null
+        baseCcy:MAIN_CURRENCY, fx:{...DEFAULT_FX_RATES}, iAm:profile.name||null, coverPhoto:null, coverUpload:null
       };
       document.getElementById('cg-title').textContent=t.createTitle;
       document.getElementById('gname').value='';
@@ -4753,11 +4871,12 @@
     // base currency
     const bcp = document.getElementById('base-ccy-picker');
     bcp.innerHTML='';
-    CCYS.forEach(c=>{
+    cgState.baseCcy = MAIN_CURRENCY;
+    [MAIN_CURRENCY].forEach(c=>{
       const b=document.createElement('button');
       b.className='chip'+(cgState.baseCcy===c?' sel':'');
       b.textContent=`${SYM[c]} ${c}`;
-      b.addEventListener('click', ()=>{ cgState.baseCcy=c; renderCreate(); });
+      b.disabled = true;
       bcp.appendChild(b);
     });
 
@@ -4827,7 +4946,7 @@
       kind:normaliseKind(cgState.kind || currentApp || 'travel'),
       splitKind:normaliseKind(cgState.kind || currentApp || 'travel'),
       members:cgState.members,
-      baseCurrency:cgState.baseCcy,
+      baseCurrency:MAIN_CURRENCY,
       fxRates:{...cgState.fx},
       iAm:cgState.members.includes(cgState.iAm) ? cgState.iAm : cgState.members[0],
       coverPhoto,
@@ -5064,10 +5183,6 @@
       list.forEach(e=>{
         const row=document.createElement('div');
         row.className='exp-row';
-        const sym=SYM[e.currency]||'¥';
-        const origStr=`${sym}${(e.originalAmount/100).toFixed(2)}`;
-        const shownStr=displayFmt(e.cnyFen,g);
-        const diff=e.currency!==displayCurrency(g);
         const n=e.splitAmong.length;
         const me=g.iAm;
         const myShare=me&&e.splitAmong.includes(me)
@@ -5085,8 +5200,7 @@
           </div>
           <div class="exp-right">
             <div class="exp-amount">
-              <div class="exp-total">${shownStr}</div>
-              <div class="exp-sub">${diff?`Paid ${origStr}`:(me&&myShare?displayFmt(myShare,g)+' ea':'')}</div>
+              ${expenseAmountHTML(e,g,me&&myShare?displayFmt(myShare,g)+' ea':'')}
             </div>
             <button class="del-btn edit-exp-btn" data-id="${e.id}" title="Edit expense">✎</button>
             <button class="del-btn archive-btn" data-id="${e.id}" title="Archive as paid">✓</button>
@@ -5131,10 +5245,6 @@
         .forEach(e=>{
           const row=document.createElement('div');
           row.className='exp-row archived';
-          const sym=SYM[e.currency]||'¥';
-          const origStr=`${sym}${(e.originalAmount/100).toFixed(2)}`;
-          const shownStr=displayFmt(e.cnyFen,g);
-          const diff=e.currency!==displayCurrency(g);
           const splitLabel=e.splitAmong.length===g.members.length?'Everyone':e.splitAmong.join(', ');
           const title = e.description||e.category;
           const meta = `Paid by <strong>${esc(e.paidBy)}</strong> · ${esc(splitLabel)} · archived`;
@@ -5147,8 +5257,7 @@
             </div>
             <div class="exp-right">
               <div class="exp-amount">
-                <div class="exp-total">${shownStr}</div>
-                <div class="exp-sub">${diff?`Paid ${origStr}`:''}</div>
+                ${expenseAmountHTML(e,g)}
               </div>
               <button class="del-btn edit-exp-btn" data-id="${e.id}" title="Edit expense">✎</button>
               <button class="del-btn archive-btn" data-id="${e.id}" title="Restore expense">↩</button>
@@ -5210,7 +5319,7 @@
             <div class="exp-meta">${meta}</div>
           </div>
           <div class="exp-right">
-            <div class="exp-amount"><div class="exp-total">${displayFmt(e.cnyFen || 0,g)}</div></div>
+            <div class="exp-amount">${expenseAmountHTML(e,g)}</div>
             <button class="del-btn del-mj-exp" data-id="${e.id}" title="Delete payout">🗑</button>
           </div>
         </div>`;
@@ -5693,7 +5802,7 @@
             <div class="mj-meta">${esc(e.description || 'Mahjong transfer')} · ${fmtDate(e.date || today())}</div>
           </div>
           <div class="mj-actions">
-            <div class="mj-amount num">${displayFmt(e.cnyFen || 0, g)}</div>
+            <div class="mj-amount num">${e.currency && e.currency !== MAIN_CURRENCY ? `${originalExpenseFmt(e)}<div class="exp-sub">&asymp; ${sgdFmt(e.cnyFen || 0,g)}</div>` : sgdFmt(e.cnyFen || 0,g)}</div>
             <button class="del-btn del-mj-exp" data-id="${e.id}" title="Delete mahjong transfer">🗑</button>
           </div>
         </div>`;
@@ -7139,22 +7248,26 @@
   }
 
   // ── INIT ──
-  load();
-  loadPrefs();
-  loadProfile();
-  loadAuth();
-  pendingJoinCode = urlTripCode();
-  if (onlineReady() && isSignedIn()) groups = [];
-  ensureProfileName();
-  bind();
-  renderHome();
-  show('home');
-  if (onlineReady() && isSignedIn()) {
-    loadMyOnlineTrips(true).then(async ()=>{
-      if (pendingJoinCode) await joinOnlineTrip(pendingJoinCode);
-      else renderHome();
-    });
+  async function init() {
+    load();
+    loadPrefs();
+    loadProfile();
+    loadAuth();
+    await restoreOAuthSessionFromUrl();
+    pendingJoinCode = urlTripCode();
+    if (onlineReady() && isSignedIn()) groups = [];
+    ensureProfileName();
+    bind();
+    renderHome();
+    show('home');
+    if (onlineReady() && isSignedIn()) {
+      loadMyOnlineTrips(true).then(async ()=>{
+        if (pendingJoinCode) await joinOnlineTrip(pendingJoinCode);
+        else renderHome();
+      });
+    }
   }
+  init();
 })();
 </script>
 </body>
