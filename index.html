@@ -1075,6 +1075,22 @@
       --font-display: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
+    html[data-font="rounded"] {
+      --font-display: ui-rounded, "Arial Rounded MT Bold", "Nunito", "Inter", system-ui, sans-serif;
+      --font-body: ui-rounded, "Aptos", "Inter", system-ui, sans-serif;
+    }
+    html[data-font="classic"] {
+      --font-display: Georgia, "Times New Roman", serif;
+      --font-body: "Aptos", "Segoe UI", system-ui, sans-serif;
+    }
+    html[data-font="clean"] {
+      --font-display: "Aptos Display", Aptos, "Segoe UI", system-ui, sans-serif;
+      --font-body: Aptos, "Segoe UI", system-ui, sans-serif;
+    }
+    html[data-font="mono"] {
+      --font-display: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+      --font-body: "Cascadia Mono", Consolas, monospace;
+    }
     html[data-accent="amber"] { --accent: #ffc857; --accent-glow: rgba(255,200,87,.48); }
     html[data-accent="violet"] { --accent: #b69bff; --accent-glow: rgba(182,155,255,.48); }
     html[data-accent="coral"] { --accent: #ff7a59; --accent-ink: #fff; --accent-glow: rgba(255,122,89,.48); }
@@ -1209,6 +1225,12 @@
       color: var(--text);
       font-size: 18px;
       font-weight: 800;
+    }
+    .app-logo {
+      width: 148px;
+      height: 46px;
+      object-fit: contain;
+      display: block;
     }
     .home-actions { display: flex; gap: 8px; align-items: center; }
     .theme-toggle-btn, .home-avatar-btn, .icon-btn {
@@ -2732,11 +2754,24 @@
     .st-desktop-rail {
       background: var(--surface) !important;
       background-image: none !important;
+      display: none !important;
+    }
+    .st-home-shell,
+    .st-group-shell {
+      display: block !important;
+      grid-template-columns: minmax(0, 1fr) !important;
     }
     .group-hero::after,
     .home-hero::before,
     .home-hero::after {
       display: none !important;
+    }
+    .st-trip-list {
+      display: flex !important;
+      flex-direction: column !important;
+      max-width: 980px;
+      margin: 0 auto;
+      width: 100%;
     }
   </style>
 </head>
@@ -2754,8 +2789,7 @@
     <main class="st-content st-home-main">
       <div class="st-topbar">
         <div class="st-brand">
-          <div class="brand-mark"></div>
-          <div class="display">SplitMoney</div>
+          <img class="app-logo" src="splitlah-logo.png" alt="SplitLah">
         </div>
         <div class="home-actions">
           <button class="theme-toggle-btn" id="theme-toggle-btn" title="Switch theme">D</button>
@@ -3053,6 +3087,10 @@
           <option value="splittrip">Default</option>
           <option value="system">System</option>
           <option value="readable">Readable</option>
+          <option value="clean">Clean</option>
+          <option value="rounded">Rounded</option>
+          <option value="classic">Classic</option>
+          <option value="mono">Mono</option>
         </select>
       </label>
       <label class="settings-field">
@@ -3261,6 +3299,7 @@
   let authMode = 'signin';
   let appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime', baseCurrency:DEFAULT_BASE_CURRENCY };
   let profileEditing = false;
+  let homeStatusFilter = 'active';
 
   let wiz = { step:1, data:{} };
   let mjLosers = new Set();
@@ -3302,6 +3341,8 @@
     if (g?.kind === 'mahjong' || g?.kind === 'general' || g?.kind === 'travel' || g?.kind === 'trip') return normaliseKind(g.kind);
     const exps = Array.isArray(g?.expenses) ? g.expenses : [];
     if (exps.length && exps.every(isMahjongExpense)) return 'mahjong';
+    const label = `${g?.name || ''} ${g?.emoji || ''}`.toLowerCase();
+    if (label.includes('mahjong') || label.includes('麻將') || label.includes('麻将')) return 'mahjong';
     return 'travel';
   }
 
@@ -3394,7 +3435,7 @@
       if (r) appPrefs = { ...appPrefs, ...JSON.parse(r) };
     } catch(e) { appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime', baseCurrency:DEFAULT_BASE_CURRENCY }; }
     if (!['light','dark'].includes(appPrefs.theme)) appPrefs.theme = 'light';
-    if (!['splittrip','system','readable'].includes(appPrefs.font)) appPrefs.font = 'splittrip';
+    if (!['splittrip','system','readable','clean','rounded','classic','mono'].includes(appPrefs.font)) appPrefs.font = 'splittrip';
     if (!['standard','high'].includes(appPrefs.contrast)) appPrefs.contrast = 'high';
     if (!['comfortable','compact'].includes(appPrefs.density)) appPrefs.density = 'comfortable';
     if (!['lime','amber','violet','coral'].includes(appPrefs.accent)) appPrefs.accent = 'lime';
@@ -3568,9 +3609,8 @@
   }
 
   function groupState(g) {
-    const active = activeExpenses(g).length;
-    const archived = archivedExpenses(g).length;
-    return active === 0 && archived > 0 ? 'past' : 'active';
+    if (g?.finalizedAt) return 'past';
+    return 'active';
   }
 
   function imageFileToCover(file) {
@@ -3796,9 +3836,15 @@
     return (params.get('trip') || '').trim().toUpperCase();
   }
 
-  function tripInviteUrl(code) {
+  function urlTripKind() {
+    const params = new URLSearchParams(location.search);
+    return normaliseKind(params.get('kind') || 'travel');
+  }
+
+  function tripInviteUrl(code, kind=null) {
     const url = new URL(location.href);
     url.searchParams.set('trip', code);
+    if (kind) url.searchParams.set('kind', normaliseKind(kind));
     return url.toString();
   }
 
@@ -4423,7 +4469,9 @@
     if (brand) brand.textContent = 'SplitMoney';
     const homeTitle = document.querySelector('#sh .st-section-head .display');
     if (homeTitle) homeTitle.textContent = 'Split Directory';
-    document.getElementById('directory-status-tabs')?.style.setProperty('display', 'none');
+    document.getElementById('directory-status-tabs')?.style.setProperty('display', 'flex');
+    document.getElementById('home-tab-active')?.classList.toggle('on', homeStatusFilter === 'active');
+    document.getElementById('home-tab-past')?.classList.toggle('on', homeStatusFilter === 'past');
     document.getElementById('directory-balance-row')?.style.setProperty('display', 'none');
     document.getElementById('app-home-back')?.remove();
     const avatarBtn = document.getElementById('home-avatar-btn');
@@ -4464,9 +4512,9 @@
         bindAuth();
       }
     }
-    renderDirectorySection(list, 'travel', 'Travel Splits', 'No travel splits yet.');
-    renderDirectorySection(list, 'mahjong', 'Mahjong Splits', 'No mahjong splits yet.');
-    renderDirectorySection(list, 'general', 'General Splits', 'No general splits yet.');
+    renderDirectorySection(list, 'travel', 'Travel Splits', homeStatusFilter === 'past' ? 'No past travel splits yet.' : 'No active travel splits yet.');
+    renderDirectorySection(list, 'mahjong', 'Mahjong Splits', homeStatusFilter === 'past' ? 'No past mahjong splits yet.' : 'No active mahjong splits yet.');
+    renderDirectorySection(list, 'general', 'General Splits', homeStatusFilter === 'past' ? 'No past general splits yet.' : 'No active general splits yet.');
 
     const btns = document.createElement('div');
     btns.className = 'home-tools';
@@ -4483,7 +4531,7 @@
 
   function renderDirectorySection(list, kind, title, emptyText) {
     const cfg = appConfig(kind);
-    const items = (appData[kind] || []).filter(g => groupKind(g) === kind && canSeeOnlineGroup(g));
+    const items = (appData[kind] || []).filter(g => groupKind(g) === kind && canSeeOnlineGroup(g) && groupState(g) === homeStatusFilter);
     const section = document.createElement('section');
     section.className = 'directory-section';
     section.innerHTML = `<div class="day-hdr">${esc(title)}</div>`;
@@ -4503,6 +4551,7 @@
     const isMahjong = kind === 'mahjong';
     const count = isMahjong ? mahjongExpenses(g).length : regularExpenses(g).length;
     const noun = isMahjong ? 'payouts' : 'expenses';
+    const stateLabel = groupState(g) === 'past' ? ' archived' : '';
     const row = document.createElement('div');
     row.className = 'group-card';
     row.innerHTML = `
@@ -4512,7 +4561,7 @@
       </div>
       <div class="group-card-inner">
         <div class="group-info">
-          <div class="group-name">${esc(g.name)}</div>
+          <div class="group-name">${esc(g.name)}${stateLabel ? ` <span style="font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;">${stateLabel.trim()}</span>` : ''}</div>
           <div class="group-meta">${(g.members||[]).length} ${isMahjong?'players':'members'} · ${count} ${noun} · ${groupUpdatedText(g)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
@@ -5585,6 +5634,8 @@
 
   function shareHTML(g) {
     const cfg = appConfig();
+    const archived = groupState(g) === 'past';
+    const archiveLabel = archived ? 'Restore to Active' : 'Archive Split';
     const online = g.remoteTripId
       ? `<div class="hint" style="margin-bottom:10px;">Online ${esc(cfg.itemName)} ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
       : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online ${esc(cfg.itemName)}</button>`;
@@ -5600,6 +5651,7 @@
         <div class="share-btn-row">
           ${shareButtons}
         </div>
+        <button class="btn btn-ghost btn-sm js-archive-group" style="font-size:13px;">${archiveLabel}</button>
         <button class="btn btn-danger btn-sm js-del-group" style="font-size:13px;">🗑️ Delete Group</button>
       </div>`;
   }
@@ -5607,6 +5659,7 @@
   function bindShare(g) {
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
+    document.querySelector('.js-archive-group')?.addEventListener('click', ()=>setGroupArchived(g, groupState(g) !== 'past'));
     document.querySelector('.js-del-group')?.addEventListener('click', async ()=>{
       if (g.remoteTripId) {
         if (!isSignedIn()) {
@@ -5630,6 +5683,38 @@
         save(); show('home'); renderHome();
       }
     });
+  }
+
+  async function setGroupArchived(g, archived) {
+    if (!g) return;
+    if (g.remoteTripId && !isSignedIn()) {
+      alert('Sign in to archive or restore this online split.');
+      return;
+    }
+    const nextFinalizedAt = archived ? new Date().toISOString() : null;
+    const previousFinalizedAt = g.finalizedAt || null;
+    g.finalizedAt = nextFinalizedAt || undefined;
+    g.updatedAt = new Date().toISOString();
+    saveAllAppData();
+    try {
+      if (g.remoteTripId) {
+        await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}`, {
+          method: 'PATCH',
+          prefer: 'return=minimal',
+          body: {
+            finalized_at: nextFinalizedAt,
+            updated_at: g.updatedAt,
+          },
+        });
+      }
+      renderGroup(g);
+      alert(archived ? 'Split archived to Past.' : 'Split restored to Active.');
+    } catch(err) {
+      g.finalizedAt = previousFinalizedAt || undefined;
+      saveAllAppData();
+      renderGroup(g);
+      alert(`Could not update this split:\n${err.message}`);
+    }
   }
 
   async function publishGroupOnline(g, showAlert=true) {
@@ -5719,7 +5804,7 @@
       renderGroup(g);
       startAutoSync(g);
       if (showAlert) {
-        const url = tripInviteUrl(g.remoteShareCode);
+        const url = tripInviteUrl(g.remoteShareCode, groupKind(g));
         const msg = `Online ${appConfig(groupKind(g)).itemName} ready. Code: ${g.remoteShareCode}`;
         navigator.clipboard?.writeText(url).catch(()=>{});
         setTripUrl(g.remoteShareCode);
@@ -5767,6 +5852,7 @@
       const paymentsById = new Map((g.payments||[]).map(p=>[p.id,p]));
       (payments||[]).forEach(r=>paymentsById.set(r.id, paymentFromRemote(r)));
       g.payments = [...paymentsById.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+      g.kind = trip.kind ? normaliseKind(trip.kind) : (g.kind ? normaliseKind(g.kind) : inferLegacyKind({ ...g, kind: null }));
 
       save();
       if (gid === g.id) renderGroup(g);
@@ -5800,7 +5886,7 @@
           remoteShareCode: trip.share_code,
           joinedUserId: authSession.user.id,
           creatorUserId: trip.created_by_user || null,
-          kind: normaliseKind(trip.kind || currentApp || 'travel'),
+          kind: trip.kind ? normaliseKind(trip.kind) : (currentApp || urlTripKind()),
           name: trip.name,
           emoji: trip.emoji || '🌏',
           coverPhoto: trip.cover_photo || null,
@@ -5831,6 +5917,12 @@
     if (!onlineReady() || !isSignedIn()) return;
     try {
       const tripRows = await db('trips?select=*&order=updated_at.desc');
+      const knownRemoteKinds = new Map();
+      Object.keys(APP_CONFIG).forEach(kind => {
+        (appData[kind] || []).forEach(g => {
+          if (g.remoteTripId) knownRemoteKinds.set(g.remoteTripId, groupKind(g));
+        });
+      });
       const loaded = (tripRows||[]).map(trip => ({
         id: trip.id,
         remoteTripId: trip.id,
@@ -5839,7 +5931,7 @@
         name: trip.name,
         emoji: trip.emoji || '🌏',
         coverPhoto: trip.cover_photo || null,
-        kind: normaliseKind(trip.kind || 'travel'),
+        kind: trip.kind ? normaliseKind(trip.kind) : (knownRemoteKinds.get(trip.id) || null),
         members: [],
         baseCurrency: trip.base_currency || DEFAULT_BASE_CURRENCY,
         fxRates: { ...DEFAULT_FX_RATES, ...(trip.fx_rates || {}) },
@@ -6642,7 +6734,7 @@
     const g=groups.find(x=>x.id===groupId);
     if (!g) return;
     if (g.remoteShareCode) {
-      const url = tripInviteUrl(g.remoteShareCode);
+      const url = tripInviteUrl(g.remoteShareCode, groupKind(g));
       if (navigator.share) {
         navigator.share({title:g.name,text:`Join "${g.name}" on SplitMoney:\n${url}`,url}).catch(()=>{});
       } else {
@@ -6761,6 +6853,14 @@
     });
     document.getElementById('home-avatar-btn').addEventListener('click', () => {
       openProfile();
+    });
+    document.getElementById('home-tab-active')?.addEventListener('click', ()=>{
+      homeStatusFilter = 'active';
+      renderHome();
+    });
+    document.getElementById('home-tab-past')?.addEventListener('click', ()=>{
+      homeStatusFilter = 'past';
+      renderHome();
     });
     document.getElementById('profile-back').addEventListener('click', ()=>{
       show('home');
