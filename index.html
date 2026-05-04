@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SplitTrip</title>
+  <title>SplitMoney</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -2054,6 +2054,42 @@
       font-size: 13px;
       line-height: 1.45;
     }
+    .settle-mode-toggle {
+      margin-top: 16px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface-2);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+    .settle-mode-toggle button {
+      border: 0;
+      border-radius: 14px;
+      background: transparent;
+      color: var(--muted);
+      padding: 10px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.25;
+      text-align: left;
+    }
+    .settle-mode-toggle button.on {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .settle-mode-toggle small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
     .settle-share-row {
       margin-top: 16px;
       display: flex;
@@ -2537,7 +2573,7 @@
 <body>
 
 <!-- ══════════════════ HOME ══════════════════ -->
-<div id="sh" class="screen">
+<div id="sh" class="screen hidden">
   <div class="st-home-shell">
     <aside class="st-desktop-rail" aria-hidden="true">
       <div class="brand-mark"></div>
@@ -2549,7 +2585,7 @@
       <div class="st-topbar">
         <div class="st-brand">
           <div class="brand-mark"></div>
-          <div class="display">SplitTrip</div>
+          <div class="display">SplitMoney</div>
         </div>
         <div class="home-actions">
           <button class="theme-toggle-btn" id="theme-toggle-btn" title="Switch theme">D</button>
@@ -2559,9 +2595,9 @@
       </div>
 
       <section class="home-hero">
-        <div class="home-app-label" id="hello-user">Net balance · across all splits</div>
-        <h1 class="num" id="home-net-balance">¥0.00</h1>
-        <div class="balance-pill-row">
+        <div class="home-app-label" id="hello-user">Split Directory</div>
+        <h1 class="num" id="home-net-balance">My Splits</h1>
+        <div class="balance-pill-row" id="directory-balance-row">
           <div class="balance-pill pos">
             <div class="pill-label">You're owed</div>
             <div class="pill-amount num" id="home-total-owed">¥0.00</div>
@@ -2574,8 +2610,8 @@
       </section>
 
       <div class="st-section-head">
-        <div class="display">Your splits</div>
-        <div class="segmented-control">
+        <div class="display">Split Directory</div>
+        <div class="segmented-control" id="directory-status-tabs">
           <button class="seg-option on" id="home-tab-active" data-home-tab="active">Active</button>
           <button class="seg-option" id="home-tab-past" data-home-tab="past">Past</button>
         </div>
@@ -2587,6 +2623,44 @@
     </main>
   </div>
   <button class="fab" id="new-group-btn" title="New split">＋</button>
+</div>
+
+<div id="create-menu" class="settings-panel hidden" role="dialog" aria-modal="true" aria-labelledby="create-menu-title">
+  <div class="settings-card">
+    <div class="settings-head">
+      <div>
+        <div class="settings-kicker">Create</div>
+        <div class="settings-title" id="create-menu-title">New Split</div>
+      </div>
+      <button class="icon-btn" id="create-menu-close" title="Close">×</button>
+    </div>
+    <div class="split-choice-grid">
+      <button class="split-choice-card" type="button" data-create-kind="travel">
+        <span class="split-choice-icon">&#9992;</span>
+        <span>
+          <span class="split-choice-title">Create Travel Split</span>
+          <span class="split-choice-sub">Meals, transport, hotels, bookings, and activities.</span>
+        </span>
+        <span>&rsaquo;</span>
+      </button>
+      <button class="split-choice-card" type="button" data-create-kind="mahjong">
+        <span class="split-choice-icon">&#126980;</span>
+        <span>
+          <span class="split-choice-title">Create Mahjong Split</span>
+          <span class="split-choice-sub">Players, winners, losers, chips, and settlement.</span>
+        </span>
+        <span>&rsaquo;</span>
+      </button>
+      <button class="split-choice-card" type="button" data-create-kind="general">
+        <span class="split-choice-icon">&#165;</span>
+        <span>
+          <span class="split-choice-title">Create General Split</span>
+          <span class="split-choice-sub">Bills, meals, shared costs, and group spending.</span>
+        </span>
+        <span>&rsaquo;</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- PROFILE -->
@@ -2603,44 +2677,46 @@
 
 <!-- ══════════════════ CREATE / EDIT GROUP ══════════════════ -->
 <!-- SPLIT TYPE CHOICE -->
-<div id="ssc" class="screen hidden">
+<div id="app-launcher-screen" class="screen hidden">
   <div class="hdr">
-    <button class="icon-btn" id="choice-back">&larr;</button>
     <div>
-      <div class="hdr-title">New split</div>
-      <div class="hdr-sub">Pick the structure first</div>
+      <div class="hdr-title">SplitMoney</div>
+      <div class="hdr-sub">Choose a calculator</div>
     </div>
   </div>
   <div class="scroll">
     <div class="split-choice-body">
       <div class="split-choice-grid">
-        <button class="split-choice-card" type="button" data-choice-kind="trip">
+        <button class="split-choice-card" type="button" data-app="travel">
           <span class="split-choice-icon">&#9992;</span>
           <span>
-            <span class="split-choice-title">Trip</span>
-            <span class="split-choice-sub">Travel groups, bookings, taxis, hotels, meals, and final settlement.</span>
+            <span class="split-choice-title">Trip Splitter</span>
+            <span class="split-choice-sub">Split travel expenses, meals, transport, hotels, and activities.</span>
           </span>
           <span>&rsaquo;</span>
         </button>
-        <button class="split-choice-card" type="button" data-choice-kind="mahjong">
-          <span class="split-choice-icon">&#126980;</span>
-          <span>
-            <span class="split-choice-title">Mahjong</span>
-            <span class="split-choice-sub">Single winners, multiple losers and winners, exact-cent pots, and pay-who.</span>
-          </span>
-          <span>&rsaquo;</span>
-        </button>
-        <button class="split-choice-card" type="button" data-choice-kind="general">
+        <button class="split-choice-card" type="button" data-app="general">
           <span class="split-choice-icon">&#165;</span>
           <span>
-            <span class="split-choice-title">General expenses</span>
-            <span class="split-choice-sub">Shared meals, house bills, one-off purchases, and everyday group spending.</span>
+            <span class="split-choice-title">General Splitter</span>
+            <span class="split-choice-sub">Split everyday shared costs, bills, meals, and group spending.</span>
+          </span>
+          <span>&rsaquo;</span>
+        </button>
+        <button class="split-choice-card" type="button" data-app="mahjong">
+          <span class="split-choice-icon">&#126980;</span>
+          <span>
+            <span class="split-choice-title">Mahjong Calculator</span>
+            <span class="split-choice-sub">Track players, winners, losers, chip transfers, and settlement.</span>
           </span>
           <span>&rsaquo;</span>
         </button>
       </div>
     </div>
   </div>
+  <div id="travel-home-screen" hidden></div>
+  <div id="general-home-screen" hidden></div>
+  <div id="mahjong-home-screen" hidden></div>
 </div>
 
 <div id="scg" class="screen hidden">
@@ -2652,10 +2728,10 @@
   <div class="scroll">
     <div class="cg-body">
       <div class="sec-label">Group Name</div>
-      <input type="text" class="field" id="gname" placeholder="Trip name" style="font-size:18px;">
+      <input type="text" class="field" id="gname" placeholder="Group name" style="font-size:18px;">
 
       <div class="mt20"></div>
-      <div class="sec-label">What are you splitting?</div>
+      <div class="sec-label">Mode</div>
       <div class="split-type-picker" id="split-type-picker"></div>
 
       <div class="mt20"></div>
@@ -2672,7 +2748,7 @@
           <input type="file" id="cover-photo-input" accept="image/*" style="display:none;">
           <button class="btn btn-ghost btn-sm" id="cover-photo-btn" type="button">Upload photo</button>
           <button class="btn btn-ghost btn-sm" id="cover-photo-remove" type="button">Remove</button>
-          <div class="hint">Uploaded photos replace the coloured trip background on cards and the trip header.</div>
+          <div class="hint">Uploaded photos replace the coloured cover on cards and the header.</div>
         </div>
       </div>
 
@@ -2745,8 +2821,8 @@
       </div>
 
       <div class="tab-bar">
-        <div class="tab on" data-tab="expenses">Activity</div>
-        <div class="tab" data-tab="mahjong">Mahjong</div>
+        <div class="tab on" data-tab="expenses">Expenses</div>
+        <div class="tab" data-tab="mahjong" style="display:none;"></div>
         <div class="tab" data-tab="balances">Balances</div>
         <div class="tab" data-tab="settle">Settle</div>
       </div>
@@ -2759,6 +2835,9 @@
     </main>
   </div>
   <button class="fab" id="add-exp-btn" title="Add expense">＋</button>
+  <div id="travel-detail-screen" hidden></div>
+  <div id="general-detail-screen" hidden></div>
+  <div id="mahjong-detail-screen" hidden></div>
 </div>
 
 <!-- ══════════════════ WIZARD ══════════════════ -->
@@ -2785,7 +2864,7 @@
   <div class="settings-card">
     <div class="settings-head">
       <div>
-        <div class="settings-kicker">SplitTrip</div>
+        <div class="settings-kicker">SplitMoney</div>
         <div class="settings-title" id="settings-title">Settings</div>
       </div>
       <button class="icon-btn" id="settings-close" title="Close">×</button>
@@ -2801,7 +2880,7 @@
       <label class="settings-field">
         <span>Font</span>
         <select id="pref-font" class="field">
-          <option value="splittrip">SplitTrip</option>
+          <option value="splittrip">Default</option>
           <option value="system">System</option>
           <option value="readable">Readable</option>
         </select>
@@ -2829,6 +2908,16 @@
           <option value="coral">Coral</option>
         </select>
       </label>
+      <label class="settings-field">
+        <span>Default base currency</span>
+        <select id="pref-base-currency" class="field">
+          <option value="SGD">S$ SGD</option>
+          <option value="CNY">¥ CNY</option>
+          <option value="USD">$ USD</option>
+          <option value="MYR">RM MYR</option>
+          <option value="HKD">HK$ HKD</option>
+        </select>
+      </label>
     </div>
   </div>
 </div>
@@ -2839,7 +2928,7 @@
 <script>
 (() => {
   // ── CONSTANTS ──
-  const CATS = [
+  const TRIP_CATS = [
     { n:'Food',       i:'🍜' },
     { n:'Drinks',     i:'🍺' },
     { n:'Didi/Taxi',  i:'🚖' },
@@ -2851,17 +2940,104 @@
     { n:'Activities', i:'🎪' },
     { n:'Baoche',     i:'🚌' },
     { n:'Bookings',   i:'🎫' },
-    { n:'General',    i:'📦' },
     { n:'Other',      i:'➕' },
   ];
 
-  const EMOJIS = ['🇨🇳','🌏','✈️','🎒','🍜','🎉','🏖️','⛰️','🗺️','🏯','🌃','🎆','🍵','🥘','🚀','🎈'];
+  const GENERAL_CATS = [
+    { n:'Food',         i:'🍜' },
+    { n:'Drinks',       i:'🍺' },
+    { n:'Bills',        i:'🧾' },
+    { n:'Groceries',    i:'🛒' },
+    { n:'Rent',         i:'🏠' },
+    { n:'Transport',    i:'🚗' },
+    { n:'Shopping',     i:'🛍️' },
+    { n:'Subscription', i:'🔁' },
+    { n:'Medical',      i:'⚕️' },
+    { n:'Gift',         i:'🎁' },
+    { n:'Other',        i:'➕' },
+  ];
+
+  const TRIP_EMOJIS = ['🇨🇳','🌏','✈️','🎒','🍜','🎉','🏖️','⛰️','🗺️','🏯','🌃','🎆','🍵','🥘','🚀','🎈'];
+  const GENERAL_EMOJIS = ['💸','🏠','🧾','🛒','🍜','☕','🎁','🚗','👥','📦','💡','🔁'];
+  const MAHJONG_EMOJIS = ['🀄','🎲','🏮','💰','🧧','♠️','♦️','♣️','♥️'];
   const CCYS = ['CNY','SGD','USD','MYR','HKD'];
   const SYM = { CNY:'¥', SGD:'S$', USD:'$', MYR:'RM', HKD:'HK$' };
-  const SPLIT_TYPES = {
-    trip: { label:'Trip', icon:'&#9992;', emoji:'✈️', placeholder:'Trip name', empty:'Create a trip, mahjong night, or general expense group to start splitting together.' },
-    mahjong: { label:'Mahjong', icon:'&#126980;', emoji:'🀄', placeholder:'Mahjong night name', empty:'Create a mahjong session to track winners, losers, pots, and settlement.' },
-    general: { label:'General', icon:'&#165;', emoji:'💸', placeholder:'Group name', empty:'Create a general expense group for meals, bills, and everyday spending.' },
+  const DEFAULT_BASE_CURRENCY = 'SGD';
+  const DEFAULT_FX_RATES = { SGD:5.40, USD:7.25, MYR:1.60, HKD:0.93 };
+  const STORAGE_KEYS = {
+    travel: 'splittrip.travel.groups',
+    general: 'splittrip.general.groups',
+    mahjong: 'splittrip.mahjong.sessions',
+    legacyTrip: 'splittrip.trip.groups',
+    migration: 'splittrip.storage.migrated.v1',
+  };
+  const APP_CONFIG = {
+    travel: {
+      label:'Travel Expense Splitter',
+      shortLabel:'Travel',
+      homeTitle:'Travel Splits',
+      launcherDesc:'Split travel expenses, meals, transport, hotels, and activities.',
+      homeEmpty:'No travel splits yet.',
+      itemName:'travel split',
+      itemPlural:'travel splits',
+      memberLabel:'Members',
+      createTitle:'New Travel Split',
+      editTitle:'Edit Travel Split',
+      namePlaceholder:'Travel split name',
+      nameLabel:'Travel split name',
+      emoji:'✈️',
+      emojis:TRIP_EMOJIS,
+      categories:TRIP_CATS,
+      activeTab:'Active',
+      pastTab:'Past',
+      expensesTab:'Expenses',
+      expenseEmpty:'No expenses yet. Tap + to add the first travel expense.',
+      addLabel:'＋ Add expense',
+    },
+    general: {
+      label:'General Splitter',
+      shortLabel:'General',
+      homeTitle:'General Splits',
+      launcherDesc:'Split everyday shared costs, bills, meals, and group spending.',
+      homeEmpty:'No general splits yet.',
+      itemName:'general split',
+      itemPlural:'general splits',
+      memberLabel:'Members',
+      createTitle:'New Group',
+      editTitle:'Edit Group',
+      namePlaceholder:'Group name',
+      nameLabel:'Group name',
+      emoji:'💸',
+      emojis:GENERAL_EMOJIS,
+      categories:GENERAL_CATS,
+      activeTab:'Active',
+      pastTab:'Past',
+      expensesTab:'Expenses',
+      expenseEmpty:'No expenses yet. Tap + to add the first shared cost.',
+      addLabel:'＋ Add expense',
+    },
+    mahjong: {
+      label:'Mahjong Calculator',
+      shortLabel:'Mahjong',
+      homeTitle:'Mahjong Splits',
+      launcherDesc:'Track players, winners, losers, chip transfers, and settlement.',
+      homeEmpty:'No mahjong splits yet.',
+      itemName:'mahjong split',
+      itemPlural:'mahjong splits',
+      memberLabel:'Players',
+      createTitle:'New Mahjong Session',
+      editTitle:'Edit Mahjong Session',
+      namePlaceholder:'Mahjong session name',
+      nameLabel:'Session name',
+      emoji:'🀄',
+      emojis:MAHJONG_EMOJIS,
+      categories:[],
+      activeTab:'Active',
+      pastTab:'Past',
+      expensesTab:'History',
+      expenseEmpty:'No payouts yet. Use the calculator to add a Mahjong payout.',
+      addLabel:'＋ Add payout',
+    },
   };
 
   // Paste your Supabase project URL and anon public key here after creating
@@ -2871,7 +3047,7 @@
   const ONLINE_SYNC_MS = 10000;
   const COVER_BUCKET = 'trip-covers';
 
-  const SUGGESTS = {
+  const TRIP_SUGGESTS = {
     Food:['Breakfast','Lunch','Dinner','Dim sum','Hot pot','Street food'],
     Drinks:['Bubble tea','Coffee','Beer','Cocktails'],
     'Didi/Taxi':['Didi to hotel','Didi to attraction','Taxi','Grab'],
@@ -2883,22 +3059,36 @@
     Activities:['Karaoke','Escape room','Spa','Bowling'],
     Baoche:['Chartered bus','Van rental'],
     Bookings:['Flight','Hotel booking','Tour booking'],
-    General:['Miscellaneous','Tips','Toiletries'],
     Other:['Other expense'],
+  };
+  const GENERAL_SUGGESTS = {
+    Food:['Breakfast','Lunch','Dinner','Takeout'],
+    Drinks:['Coffee','Tea','Drinks','Bar tab'],
+    Bills:['Utilities','Electricity','Water','Internet'],
+    Groceries:['Supermarket','Household supplies','Snacks'],
+    Rent:['Rent','Deposit','Room share'],
+    Transport:['Fuel','Parking','Ride share','Bus fare'],
+    Shopping:['Household item','Shared purchase','Supplies'],
+    Subscription:['Streaming','Software','Membership'],
+    Medical:['Pharmacy','Clinic','Insurance'],
+    Gift:['Birthday gift','Farewell gift','Shared present'],
+    Other:['Other cost'],
   };
 
   const AV_COLORS = ['#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e67e22','#34495e','#e91e63','#00bcd4','#ff5722','#607d8b'];
 
   // ── STATE ──
+  let currentApp = null;
+  let appData = { travel:[], general:[], mahjong:[] };
   let groups = [];
   let gid = null; // active group id
   let profile = { id:null, name:'' };
   let authSession = null;
   let syncTimer = null;
+  let settleViewMode = 'min';
   let pendingJoinCode = null;
   let authMode = 'signin';
-  let appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime' };
-  let homeTripTab = 'active';
+  let appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime', baseCurrency:DEFAULT_BASE_CURRENCY };
   let profileEditing = false;
 
   let wiz = { step:1, data:{} };
@@ -2906,24 +3096,103 @@
   let mjWinners = new Set();
 
   let cgState = {
-    editId: null, kind:'trip', emoji:'🌏', members:[],
-    baseCcy:'CNY', fx:{ SGD:5.40, USD:7.25, MYR:1.60, HKD:0.93 }, iAm:null, coverPhoto:null, coverUpload:null
+    editId: null, kind:'travel', emoji:'🌏', members:[],
+    baseCcy:DEFAULT_BASE_CURRENCY, fx:{...DEFAULT_FX_RATES}, iAm:null, coverPhoto:null, coverUpload:null
   };
 
   // ── STORAGE ──
+  function normaliseKind(kind) {
+    if (kind === 'trip') return 'travel';
+    return APP_CONFIG[kind] ? kind : 'travel';
+  }
+
+  function normaliseRecord(g, kind='travel') {
+    const safeKind = normaliseKind(g?.kind || kind);
+    return {
+      ...g,
+      kind: safeKind,
+      baseCurrency: g.baseCurrency || DEFAULT_BASE_CURRENCY,
+      fxRates: { ...DEFAULT_FX_RATES, ...(g.fxRates || {}) },
+      expenses: Array.isArray(g.expenses) ? g.expenses : [],
+      payments: Array.isArray(g.payments) ? g.payments : [],
+    };
+  }
+
+  function inferLegacyKind(g) {
+    if (g?.kind === 'mahjong' || g?.kind === 'general' || g?.kind === 'travel' || g?.kind === 'trip') return normaliseKind(g.kind);
+    const exps = Array.isArray(g?.expenses) ? g.expenses : [];
+    if (exps.length && exps.every(isMahjongExpense)) return 'mahjong';
+    return 'travel';
+  }
+
+  function migrateLegacyStorage() {
+    try {
+      if (localStorage.getItem(STORAGE_KEYS.migration)) return;
+      const raw = localStorage.getItem('splittrip_v3');
+      if (!raw) {
+        localStorage.setItem(STORAGE_KEYS.migration, new Date().toISOString());
+        return;
+      }
+      const legacy = JSON.parse(raw);
+      if (!Array.isArray(legacy)) return;
+      const next = {
+        travel: readStoredAppData('travel'),
+        general: readStoredAppData('general'),
+        mahjong: readStoredAppData('mahjong'),
+      };
+      const seen = {
+        travel: new Set(next.travel.map(g=>g.id)),
+        general: new Set(next.general.map(g=>g.id)),
+        mahjong: new Set(next.mahjong.map(g=>g.id)),
+      };
+      legacy.forEach(g => {
+        const kind = inferLegacyKind(g);
+        if (!APP_CONFIG[kind]) return;
+        if (seen[kind].has(g.id)) return;
+        next[kind].push(normaliseRecord(g, kind));
+        seen[kind].add(g.id);
+      });
+      Object.keys(APP_CONFIG).forEach(kind => {
+        localStorage.setItem(STORAGE_KEYS[kind], JSON.stringify(next[kind]));
+      });
+      localStorage.setItem(STORAGE_KEYS.migration, new Date().toISOString());
+    } catch(e) {}
+  }
+
+  function readStoredAppData(kind) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS[kind]);
+      const rows = raw ? JSON.parse(raw) : [];
+      const normalised = Array.isArray(rows) ? rows.map(g=>normaliseRecord(g, kind)) : [];
+      if (kind === 'travel') {
+        const legacyRaw = localStorage.getItem(STORAGE_KEYS.legacyTrip);
+        const legacyRows = legacyRaw ? JSON.parse(legacyRaw) : [];
+        if (Array.isArray(legacyRows)) {
+          const seen = new Set(normalised.map(g=>g.id));
+          legacyRows.map(g=>normaliseRecord(g, 'travel')).forEach(g=>{
+            if (!seen.has(g.id)) normalised.push(g);
+          });
+        }
+      }
+      return normalised;
+    } catch(e) {
+      return [];
+    }
+  }
+
   function save() {
-    try { localStorage.setItem('splittrip_v3', JSON.stringify(groups)); } catch(e){}
+    if (!currentApp || !APP_CONFIG[currentApp]) return;
+    appData[currentApp] = groups;
+    try { localStorage.setItem(STORAGE_KEYS[currentApp], JSON.stringify(groups)); } catch(e){}
   }
   function load() {
-    try {
-      const r = localStorage.getItem('splittrip_v3');
-      if (r) groups = JSON.parse(r);
-      groups.forEach(g => {
-        g.kind = g.kind || 'trip';
-        g.expenses = Array.isArray(g.expenses) ? g.expenses : [];
-        g.payments = Array.isArray(g.payments) ? g.payments : [];
-      });
-    } catch(e) { groups = []; }
+    migrateLegacyStorage();
+    appData = {
+      travel: readStoredAppData('travel'),
+      general: readStoredAppData('general'),
+      mahjong: readStoredAppData('mahjong'),
+    };
+    groups = currentApp ? appData[currentApp] : [];
   }
   function saveProfile() {
     try { localStorage.setItem('splittrip_profile_v1', JSON.stringify(profile)); } catch(e){}
@@ -2938,12 +3207,13 @@
     try {
       const r = localStorage.getItem('splittrip_prefs_v1');
       if (r) appPrefs = { ...appPrefs, ...JSON.parse(r) };
-    } catch(e) { appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime' }; }
+    } catch(e) { appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime', baseCurrency:DEFAULT_BASE_CURRENCY }; }
     if (!['light','dark'].includes(appPrefs.theme)) appPrefs.theme = 'light';
     if (!['splittrip','system','readable'].includes(appPrefs.font)) appPrefs.font = 'splittrip';
     if (!['standard','high'].includes(appPrefs.contrast)) appPrefs.contrast = 'high';
     if (!['comfortable','compact'].includes(appPrefs.density)) appPrefs.density = 'comfortable';
     if (!['lime','amber','violet','coral'].includes(appPrefs.accent)) appPrefs.accent = 'lime';
+    if (!CCYS.includes(appPrefs.baseCurrency)) appPrefs.baseCurrency = DEFAULT_BASE_CURRENCY;
     applyPrefs();
   }
   function applyPrefs() {
@@ -2984,12 +3254,7 @@
     saveProfile();
   }
   function ensureProfileName() {
-    if (profile.name) return;
-    const name = (prompt('What name should this device use?')||'').trim();
-    if (name) {
-      profile.name = name;
-      saveProfile();
-    }
+    if (!profile.name && isSignedIn()) applyAuthProfile();
   }
   function editProfileName() {
     const name = (prompt('Name for this device:', profile.name||'')||'').trim();
@@ -3070,16 +3335,28 @@
   }
 
   function groupKind(g) {
-    return (g && SPLIT_TYPES[g.kind]) ? g.kind : 'trip';
+    return normaliseKind(g?.kind || currentApp || 'travel');
   }
 
   function groupKindLabel(g) {
-    return SPLIT_TYPES[groupKind(g)].label;
+    return APP_CONFIG[groupKind(g)].shortLabel;
   }
 
   function groupKindBadge(g) {
-    const t = SPLIT_TYPES[groupKind(g)];
+    const t = APP_CONFIG[groupKind(g)];
     return `<span class="type-badge">${t.icon} ${esc(t.label)}</span>`;
+  }
+
+  function appConfig(kind=currentApp) {
+    return APP_CONFIG[normaliseKind(kind)] || APP_CONFIG.travel;
+  }
+
+  function currentCategories() {
+    return currentApp === 'general' ? GENERAL_CATS : TRIP_CATS;
+  }
+
+  function currentSuggests() {
+    return currentApp === 'general' ? GENERAL_SUGGESTS : TRIP_SUGGESTS;
   }
 
   function isMahjongExpense(e) {
@@ -3173,7 +3450,7 @@
     if (!prev) return;
     prev.style.background = cgState.coverPhoto
       ? `linear-gradient(180deg, rgba(0,0,0,0) 28%, rgba(0,0,0,.36) 100%), url("${cgState.coverPhoto}") center/cover no-repeat`
-      : tripCover({ name: document.getElementById('gname')?.value || 'New trip', emoji: cgState.emoji });
+      : tripCover({ name: document.getElementById('gname')?.value || 'New split', emoji: cgState.emoji });
     if (icon) icon.textContent = cgState.emoji || '🌏';
   }
 
@@ -3200,6 +3477,23 @@
     if (ccy === 'CNY') return cnyFen;
     const rate = fx?.[ccy] || 1;
     return Math.round((cnyFen/100)/rate*100);
+  }
+
+  function displayCurrency(g) {
+    return g?.baseCurrency || appPrefs.baseCurrency || DEFAULT_BASE_CURRENCY;
+  }
+
+  function displayMinor(cnyFen, g) {
+    return fromCny(cnyFen || 0, displayCurrency(g), { ...DEFAULT_FX_RATES, ...(g?.fxRates || {}) });
+  }
+
+  function displayFmt(cnyFen, g) {
+    return fmt(displayMinor(cnyFen, g), displayCurrency(g));
+  }
+
+  function signedDisplayMoney(cnyFen, g) {
+    if (!cnyFen) return fmt(0, displayCurrency(g));
+    return `${cnyFen > 0 ? '+' : '-'}${displayFmt(Math.abs(cnyFen), g)}`;
   }
 
   function splitEvenly(total, members) {
@@ -3335,7 +3629,7 @@
       name: g.name,
       emoji: g.emoji || '',
       cover_photo: g.coverPhoto || null,
-      base_currency: g.baseCurrency || 'CNY',
+      base_currency: g.baseCurrency || DEFAULT_BASE_CURRENCY,
       fx_rates: g.fxRates || {},
       created_by_device: profile.id,
       created_by_user: authSession?.user?.id || null,
@@ -3474,7 +3768,8 @@
 
   function requireSignIn() {
     if (isSignedIn()) return true;
-    alert('Please sign in first. Online trips are private to signed-in trip members.');
+    const cfg = appConfig();
+    alert(`Please sign in first. Online ${cfg.itemPlural} are private to signed-in members.`);
     return false;
   }
 
@@ -3495,6 +3790,45 @@
     return txs;
   }
 
+  function activitySettlement(g) {
+    const pairs = new Map();
+    const names = [...(g.members || [])].sort();
+    function pairKey(a,b) {
+      const ordered = [a,b].sort();
+      return `${ordered[0]}\u0000${ordered[1]}`;
+    }
+    function addDebt(from,to,amt) {
+      if (!from || !to || from === to || !amt) return;
+      const key = pairKey(from,to);
+      const [a,b] = key.split('\u0000');
+      pairs.set(key, (pairs.get(key) || 0) + (from === a ? amt : -amt));
+    }
+
+    activeExpenses(g).forEach(e => {
+      const shares = splitEvenly(e.cnyFen,e.splitAmong || []);
+      (e.splitAmong || []).forEach(name => {
+        if (name !== e.paidBy) addDebt(name,e.paidBy,shares[name] || 0);
+      });
+    });
+    (g.payments || []).forEach(p => {
+      if (!p.archivedAt) addDebt(p.from,p.to,-p.cnyFen);
+    });
+
+    return [...pairs.entries()].flatMap(([key,amt]) => {
+      if (!amt) return [];
+      const [a,b] = key.split('\u0000');
+      return amt > 0
+        ? [{ from:a, to:b, amt }]
+        : [{ from:b, to:a, amt:Math.abs(amt) }];
+    }).filter(tx => tx.amt > 0).sort((x,y) => {
+      const fromSort = names.indexOf(x.from) - names.indexOf(y.from);
+      if (fromSort) return fromSort;
+      const toSort = names.indexOf(x.to) - names.indexOf(y.to);
+      if (toSort) return toSort;
+      return y.amt - x.amt;
+    });
+  }
+
   function today() { return new Date().toISOString().slice(0,10); }
 
   function fmtDate(iso) {
@@ -3508,7 +3842,7 @@
   }
 
   // ── SCREEN ROUTER ──
-  const SCREENS = { home:'sh', profile:'sp', choice:'ssc', create:'scg', group:'sg', wizard:'sw' };
+  const SCREENS = { home:'sh', profile:'sp', create:'scg', group:'sg', wizard:'sw' };
   function show(name) {
     Object.values(SCREENS).forEach(id => {
       const el = document.getElementById(id);
@@ -3518,7 +3852,8 @@
 
   // ── PROFILE ──
   function profileVisibleGroups() {
-    return onlineReady() ? groups.filter(g=>g.remoteTripId) : groups;
+    const all = [...(appData.travel||[]), ...(appData.mahjong||[]), ...(appData.general||[])];
+    return onlineReady() ? all.filter(g=>g.remoteTripId) : all;
   }
 
   function profileStats() {
@@ -3532,8 +3867,8 @@
       sum + (g.expenses||[]).reduce((s,e)=>s + (e.cnyFen||0),0), 0);
     const since = profile.createdAt ? new Date(profile.createdAt) : new Date();
     return {
-      trips: visible.length,
-      activeTrips: active.length,
+      records: visible.length,
+      activeRecords: active.length,
       totalSpent,
       friends: friends.size,
       memberSince: since.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}).replace(' ', " '"),
@@ -3599,10 +3934,10 @@
   }
 
   function shareProfile() {
-    const name = profile.name || 'SplitTrip user';
-    const text = `${name} is using SplitTrip to keep shared trips settled.`;
+    const name = profile.name || 'SplitMoney user';
+    const text = `${name} is using SplitMoney to keep shared costs settled.`;
     if (navigator.share) {
-      navigator.share({title:'SplitTrip profile',text}).catch(()=>{});
+      navigator.share({title:'SplitMoney profile',text}).catch(()=>{});
       return;
     }
     navigator.clipboard?.writeText(text)
@@ -3646,8 +3981,8 @@
 
       <div class="sec-label">Stats</div>
       <section class="profile-stats">
-        ${profileStatHTML('Trips', String(stats.trips), `${stats.activeTrips} active`)}
-        ${profileStatHTML('Settled', fmt(stats.totalSpent,'CNY'), 'all time', true)}
+        ${profileStatHTML('Records', String(stats.records), `${stats.activeRecords} active`)}
+        ${profileStatHTML('Settled', displayFmt(stats.totalSpent,null), 'all time', true)}
         ${profileStatHTML('Friends', String(stats.friends))}
         ${profileStatHTML('Member since', stats.memberSince)}
       </section>
@@ -3670,7 +4005,7 @@
     document.getElementById('profile-cancel-btn')?.addEventListener('click', ()=>setProfileEditing(false));
     document.getElementById('profile-appearance')?.addEventListener('click', openSettings);
     document.getElementById('profile-export')?.addEventListener('click', exportAll);
-    document.getElementById('profile-help')?.addEventListener('click', ()=>alert('SplitTrip keeps online trips private to signed-in members who joined with the trip code. For appearance changes, open Appearance from this screen.'));
+    document.getElementById('profile-help')?.addEventListener('click', ()=>alert('SplitMoney keeps online records private to signed-in members who joined with an invite code. For appearance changes, open Appearance from this screen.'));
     document.getElementById('profile-notifications')?.addEventListener('click', ()=>alert('Notifications are ready for the UI. Connect push or email notifications when the backend service is added.'));
     document.getElementById('profile-signout')?.addEventListener('click', ()=>{
       if (confirm(`Sign out of ${email || profile.name || 'your account'}?`)) signOut();
@@ -3683,11 +4018,12 @@
 
   // ── HOME ──
   function authHTML() {
+    const cfg = appConfig();
     if (!onlineReady()) {
       return `
         <div class="auth-card st-auth-card">
-          <div class="auth-title">Online trips are offline.</div>
-          <div class="auth-sub">Add your Supabase URL and anon key to enable private shared trips.</div>
+          <div class="auth-title">Online sync is offline.</div>
+          <div class="auth-sub">Add your Supabase URL and anon key to enable private shared ${esc(cfg.itemPlural)}.</div>
         </div>`;
     }
     if (isSignedIn()) {
@@ -3697,7 +4033,7 @@
       return `
         <div class="auth-card st-auth-card">
           <div class="auth-title">Money,<br>after the fact.</div>
-          <div class="auth-sub">Create an account to keep trips private and synced with everyone in the group.</div>
+          <div class="auth-sub">Create an account to keep this ${esc(cfg.itemName)} private and synced with everyone involved.</div>
           <div class="auth-grid">
             <input type="text" class="field" id="auth-name" placeholder="Display name" value="${esc(profile.name||'')}">
             <input type="email" class="field" id="auth-email" placeholder="Email">
@@ -3713,7 +4049,7 @@
     return `
       <div class="auth-card st-auth-card">
         <div class="auth-title">Money,<br>after the fact.</div>
-        <div class="auth-sub">The polished way to split bills, trips, and shared houses.</div>
+        <div class="auth-sub">Sign in to sync this ${esc(cfg.itemName)} privately.</div>
         <div class="auth-grid">
           <input type="text" class="field" id="auth-username" placeholder="Email">
           <input type="password" class="field" id="auth-signin-password" placeholder="Password">
@@ -3731,6 +4067,12 @@
     document.getElementById('auth-show-signup')?.addEventListener('click', () => setAuthMode('signup'));
     document.getElementById('auth-show-signin')?.addEventListener('click', () => setAuthMode('signin'));
     document.getElementById('auth-signout')?.addEventListener('click', signOut);
+    document.querySelectorAll('#auth-email,#auth-password,#auth-confirm-password,#auth-name').forEach(el => {
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') signUp(); });
+    });
+    document.querySelectorAll('#auth-username,#auth-signin-password').forEach(el => {
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+    });
   }
 
   function toggleTheme() {
@@ -3746,6 +4088,7 @@
       ['pref-contrast','contrast'],
       ['pref-density','density'],
       ['pref-accent','accent'],
+      ['pref-base-currency','baseCurrency'],
     ];
     pairs.forEach(([id,key])=>{
       const el = document.getElementById(id);
@@ -3788,7 +4131,7 @@
   function signInFormValues() {
     const username = (document.getElementById('auth-username')?.value || '').trim();
     const password = document.getElementById('auth-signin-password')?.value || '';
-    if (!username || !password) throw new Error('Enter both username and password.');
+    if (!username || !password) throw new Error('Enter both email and password.');
     return { username, password };
   }
 
@@ -3806,12 +4149,14 @@
         await loadMyOnlineTrips(true);
         if (pendingJoinCode) {
           await joinOnlineTrip(pendingJoinCode);
-          alert('Account created and joined the trip.');
+          alert('Account created and joined the online record.');
           return;
         }
         renderHome();
         alert('Account created and signed in.');
       } else {
+        authMode = 'signin';
+        renderHome();
         alert('Account created, but Supabase still requires email confirmation. Disable email confirmation in Supabase Auth settings if you want immediate sign-in.');
       }
     } catch(err) {
@@ -3847,14 +4192,38 @@
       }
     } catch(e) {}
     clearAuth();
-    groups=[];
-    save();
-    show('home');
-    renderHome();
+    backToDirectory();
   }
 
   function renderHome() {
+    currentApp = null;
+    groups = [];
+    gid = null;
+    renderSplitDirectory();
+  }
+
+  function renderTravelHome() {
+    renderSplitDirectory();
+  }
+
+  function renderGeneralHome() {
+    renderSplitDirectory();
+  }
+
+  function renderMahjongHome() {
+    renderSplitDirectory();
+  }
+
+  function renderSplitDirectory() {
+    document.querySelectorAll('#travel-home-screen,#general-home-screen,#mahjong-home-screen').forEach(el => { el.hidden = true; });
     const homeScreen = document.getElementById('sh');
+    const brand = document.querySelector('#sh .st-brand .display');
+    if (brand) brand.textContent = 'SplitMoney';
+    const homeTitle = document.querySelector('#sh .st-section-head .display');
+    if (homeTitle) homeTitle.textContent = 'Split Directory';
+    document.getElementById('directory-status-tabs')?.style.setProperty('display', 'none');
+    document.getElementById('directory-balance-row')?.style.setProperty('display', 'none');
+    document.getElementById('app-home-back')?.remove();
     const avatarBtn = document.getElementById('home-avatar-btn');
     if (avatarBtn) {
       if (profile.name) {
@@ -3872,145 +4241,131 @@
     }
     const hello = document.getElementById('hello-user');
     if (hello) {
-      const visCount = onlineReady() ? groups.filter(g=>g.remoteTripId).length : groups.length;
-      hello.textContent = visCount > 0 ? 'Net balance · across all splits' : 'Money · after the fact';
+      hello.textContent = 'Split Directory';
       hello.title = '';
       hello.style.cursor = 'default';
     }
-    const list = document.getElementById('groups-list');
-    const visibleGroups = onlineReady() ? groups.filter(g=>g.remoteTripId) : groups;
-    const activeGroups = visibleGroups.filter(g=>groupState(g)==='active');
-    const pastGroups = visibleGroups.filter(g=>groupState(g)==='past');
-    if (homeTripTab === 'past' && !pastGroups.length && activeGroups.length) homeTripTab = 'active';
-    document.querySelectorAll('[data-home-tab]').forEach(b=>{
-      b.classList.toggle('on', b.dataset.homeTab === homeTripTab);
-    });
-
-    const owed = activeGroups.reduce((sum,g)=>sum + Math.max(0, g.iAm ? (balances(g)[g.iAm]||0) : 0), 0);
-    const owe = activeGroups.reduce((sum,g)=>sum + Math.max(0, -(g.iAm ? (balances(g)[g.iAm]||0) : 0)), 0);
-    const netTotal = owed - owe;
     const netEl = document.getElementById('home-net-balance');
     if (netEl) {
-      netEl.textContent = signedMoney(netTotal, 'CNY');
-      netEl.classList.toggle('neg', netTotal < 0);
+      netEl.textContent = 'My Splits';
+      netEl.classList.remove('neg');
     }
-    const owedEl = document.getElementById('home-total-owed');
-    if (owedEl) owedEl.textContent = fmt(owed, 'CNY');
-    const oweEl = document.getElementById('home-total-owe');
-    if (oweEl) oweEl.textContent = fmt(owe, 'CNY');
-
-    if (onlineReady() && !isSignedIn()) {
-      const code = pendingJoinCode || urlTripCode();
-      homeScreen?.classList.add('auth-mode');
-      list.innerHTML = `
-        ${authHTML()}
-        <div class="empty auth-note">
-          <div class="icon">🔒</div>
-          <h3>Sign in required</h3>
-          <p>${code?`Sign in to join trip ${esc(code)}.`:'Only signed-in trip members can view online trips.'}</p>
-        </div>`;
-      bindAuth();
-      return;
-    }
-
+    const list = document.getElementById('groups-list');
     homeScreen?.classList.remove('auth-mode');
-    const filteredGroups = homeTripTab === 'past' ? pastGroups : activeGroups;
-    if (!visibleGroups.length || !filteredGroups.length) {
-      list.innerHTML = `
-        ${authHTML()}
-        <div class="empty">
-          <div class="icon">✈️</div>
-          <h3>${visibleGroups.length ? 'No past splits' : 'No splits yet'}</h3>
-          <p>${visibleGroups.length ? 'Settled splits will appear here once their active entries are archived.' : SPLIT_TYPES.trip.empty}</p>
-          <div class="mt20" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
-            <button class="btn btn-green" id="first-group-btn" style="width:auto;padding:12px 24px;">Create split</button>
-            <button class="btn btn-ghost" id="join-online-btn" style="width:auto;padding:12px 20px;">Join online</button>
-          </div>
-        </div>`;
-      document.getElementById('first-group-btn')?.addEventListener('click', openSplitChoice);
-      document.getElementById('join-online-btn')?.addEventListener('click', ()=>joinOnlineTrip());
-      bindAuth();
-    } else {
-      list.innerHTML = authHTML();
-      bindAuth();
-      filteredGroups.forEach(g => {
-        const net = balances(g);
-        const myNet = g.iAm ? (net[g.iAm]||0) : 0;
-        const cls = myNet>0?'col-green':myNet<0?'col-red':'col-muted';
-        const status = myNet>0 ? "You're owed" : myNet<0 ? 'You owe' : 'Settled';
-        const txt = moneyImpact(myNet,'CNY');
-        const expenseCount = regularExpenses(g).length;
-        const mjCount = mahjongExpenses(g).length;
-        const total = groupTotalSpent(g);
-
-        const row = document.createElement('div');
-        row.className = 'group-card';
-        row.innerHTML = `
-          <div class="group-cover" style="background:${tripCover(g)}">
-            <div class="group-cover-icon">${g.emoji||'✈️'}</div>
-            ${stackHTML(g.members||[])}
-          </div>
-          <div class="group-card-inner">
-            <div class="group-info">
-              <div class="group-name">${esc(g.name)}</div>
-              <div class="group-meta">${groupKindBadge(g)}${g.members.length} people · ${expenseCount} expenses${mjCount ? ` · ${mjCount} MJ` : ''} · ${groupUpdatedText(g)}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;">
-              <div style="font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;">${status}</div>
-              <div class="group-balance ${cls}">${txt}</div>
-            </div>
-            ${total ? `<div class="trip-total num" aria-hidden="true" style="display:none;">${fmt(total,'CNY')}</div>` : ''}
-          </div>`;
-        row.addEventListener('click', ()=>openGroup(g.id));
-        list.appendChild(row);
-      });
-
-      // backup/import row
-      const btns = document.createElement('div');
-      btns.className = 'home-tools';
-      btns.innerHTML = onlineReady()
-        ? `<button class="btn btn-ghost btn-sm" id="h-join-online">Join online</button>`
-        : `<button class="btn btn-ghost btn-sm" id="h-export">Export backup</button>
-           <button class="btn btn-ghost btn-sm" id="h-import">Import</button>
-           <button class="btn btn-ghost btn-sm" id="h-join-online">Join online</button>
-           <input type="file" id="h-import-file" accept="application/json" style="display:none;">`;
-      list.appendChild(btns);
-      document.getElementById('h-export')?.addEventListener('click', exportAll);
-      document.getElementById('h-import')?.addEventListener('click', ()=>document.getElementById('h-import-file').click());
-      document.getElementById('h-join-online').addEventListener('click', ()=>joinOnlineTrip());
-      document.getElementById('h-import-file')?.addEventListener('change', importAll);
+    if (!list) return;
+    list.innerHTML = '';
+    if (!isSignedIn()) {
+      const authWrap = document.createElement('div');
+      authWrap.innerHTML = authHTML();
+      if (authWrap.firstElementChild) {
+        list.appendChild(authWrap.firstElementChild);
+        bindAuth();
+      }
     }
+    renderDirectorySection(list, 'travel', 'Travel Splits', 'No travel splits yet.');
+    renderDirectorySection(list, 'mahjong', 'Mahjong Splits', 'No mahjong splits yet.');
+    renderDirectorySection(list, 'general', 'General Splits', 'No general splits yet.');
+
+    const btns = document.createElement('div');
+    btns.className = 'home-tools';
+    btns.innerHTML = `
+      <button class="btn btn-ghost btn-sm" id="h-export">Export backup</button>
+      <button class="btn btn-ghost btn-sm" id="h-import">Import</button>
+      <input type="file" id="h-import-file" accept="application/json" style="display:none;">`;
+    list.appendChild(btns);
+    document.getElementById('h-export')?.addEventListener('click', exportAll);
+    document.getElementById('h-import')?.addEventListener('click', ()=>document.getElementById('h-import-file').click());
+    document.getElementById('h-import-file')?.addEventListener('change', importAll);
   }
 
-  // ── CREATE GROUP ──
-  function openSplitChoice() {
-    show('choice');
+  function renderDirectorySection(list, kind, title, emptyText) {
+    const cfg = appConfig(kind);
+    const items = (appData[kind] || []).filter(g => groupKind(g) === kind);
+    const section = document.createElement('section');
+    section.className = 'directory-section';
+    section.innerHTML = `<div class="day-hdr">${esc(title)}</div>`;
+    if (!items.length) {
+      section.innerHTML += `
+        <div class="empty" style="padding:28px 24px;">
+          <div class="icon">${cfg.emoji}</div>
+          <h3>${esc(emptyText)}</h3>
+        </div>`;
+    } else {
+      items.forEach(g => section.appendChild(directoryCard(g, kind)));
+    }
+    list.appendChild(section);
   }
 
-  function openCreate(editId=null, presetKind='trip') {
+  function directoryCard(g, kind) {
+    const isMahjong = kind === 'mahjong';
+    const count = isMahjong ? mahjongExpenses(g).length : regularExpenses(g).length;
+    const noun = isMahjong ? 'payouts' : 'expenses';
+    const row = document.createElement('div');
+    row.className = 'group-card';
+    row.innerHTML = `
+      <div class="group-cover" style="background:${tripCover(g)}">
+        <div class="group-cover-icon">${g.emoji || appConfig(kind).emoji}</div>
+        ${stackHTML(g.members||[])}
+      </div>
+      <div class="group-card-inner">
+        <div class="group-info">
+          <div class="group-name">${esc(g.name)}</div>
+          <div class="group-meta">${(g.members||[]).length} ${isMahjong?'players':'members'} · ${count} ${noun} · ${groupUpdatedText(g)}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Open</div>
+          <div class="group-balance col-muted">›</div>
+        </div>
+      </div>`;
+    row.addEventListener('click', ()=>openGroup(g.id, kind));
+    return row;
+  }
+
+  // ── APP ROUTING + CREATE GROUP ──
+  function openCreateMenu() {
+    document.getElementById('create-menu')?.classList.remove('hidden');
+  }
+
+  function closeCreateMenu() {
+    document.getElementById('create-menu')?.classList.add('hidden');
+  }
+
+  function backToDirectory() {
+    if (syncTimer) { clearInterval(syncTimer); syncTimer=null; }
+    currentApp = null;
+    groups = [];
+    gid = null;
+    renderHome();
+    show('home');
+  }
+
+  function openCreate(editId=null, kind=null) {
+    const createKind = normaliseKind(kind || currentApp || 'travel');
+    currentApp = createKind;
+    groups = appData[createKind] || [];
     const grp = editId ? groups.find(g=>g.id===editId) : null;
     if (grp) {
       cgState = {
         editId, kind:groupKind(grp), emoji:grp.emoji||'🌏',
         members:[...(grp.members||[])],
-        baseCcy:grp.baseCurrency||'CNY',
-        fx:{...grp.fxRates},
+        baseCcy:grp.baseCurrency||DEFAULT_BASE_CURRENCY,
+        fx:{...DEFAULT_FX_RATES, ...grp.fxRates},
         iAm:grp.iAm||null,
         coverPhoto:grp.coverPhoto||null,
         coverUpload:null,
       };
-      document.getElementById('cg-title').textContent='Edit Group';
+      document.getElementById('cg-title').textContent=appConfig(createKind).editTitle;
       document.getElementById('gname').value=grp.name||'';
     } else {
-      const kind = SPLIT_TYPES[presetKind] ? presetKind : 'trip';
-      const t = SPLIT_TYPES[kind];
+      const t = appConfig(createKind);
       cgState = {
-        editId:null, kind, emoji:t.emoji, members:[],
-        baseCcy:'CNY', fx:{SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93}, iAm:profile.name||null, coverPhoto:null, coverUpload:null
+        editId:null, kind:createKind, emoji:t.emoji, members:[],
+        baseCcy:appPrefs.baseCurrency || DEFAULT_BASE_CURRENCY, fx:{...DEFAULT_FX_RATES}, iAm:profile.name||null, coverPhoto:null, coverUpload:null
       };
-      document.getElementById('cg-title').textContent=`New ${t.label}`;
+      document.getElementById('cg-title').textContent=t.createTitle;
       document.getElementById('gname').value='';
     }
+    closeCreateMenu();
     renderCreate();
     show('create');
   }
@@ -4018,32 +4373,27 @@
   function renderSplitTypePicker() {
     const p = document.getElementById('split-type-picker');
     if (!p) return;
-    p.innerHTML = Object.entries(SPLIT_TYPES).map(([kind,t]) => `
-      <button class="split-type-chip ${cgState.kind===kind?'sel':''}" type="button" data-kind="${kind}">
-        ${t.icon} ${esc(t.label)}
-      </button>`).join('');
-    p.querySelectorAll('[data-kind]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const kind = btn.dataset.kind;
-        if (!SPLIT_TYPES[kind]) return;
-        cgState.kind = kind;
-        if (!cgState.editId) cgState.emoji = SPLIT_TYPES[kind].emoji;
-        document.getElementById('cg-title').textContent = cgState.editId ? 'Edit Group' : `New ${SPLIT_TYPES[kind].label}`;
-        renderCreate();
-      });
-    });
+    p.innerHTML = '';
+    p.style.display = 'none';
+    const label = p.previousElementSibling;
+    if (label) label.style.display = 'none';
   }
 
   function renderCreate() {
-    const t = SPLIT_TYPES[cgState.kind] || SPLIT_TYPES.trip;
+    const t = APP_CONFIG[normaliseKind(cgState.kind)] || APP_CONFIG.travel;
     const nameInput = document.getElementById('gname');
-    if (nameInput) nameInput.placeholder = t.placeholder;
+    if (nameInput) nameInput.placeholder = t.namePlaceholder;
+    const labels = document.querySelectorAll('#scg .sec-label');
+    if (labels[0]) labels[0].textContent = t.nameLabel;
+    if (labels[4]) labels[4].textContent = t.memberLabel;
+    const coverHint = document.querySelector('#scg .cover-actions .hint');
+    if (coverHint) coverHint.textContent = `Uploaded photos replace the coloured ${t.itemName} background on cards and the ${t.itemName} header.`;
     renderSplitTypePicker();
 
     // emoji grid
     const eg = document.getElementById('emoji-grid');
     eg.innerHTML='';
-    EMOJIS.forEach(e => {
+    t.emojis.forEach(e => {
       const b = document.createElement('button');
       b.className='em-opt'+(cgState.emoji===e?' sel':'');
       b.textContent=e;
@@ -4129,7 +4479,7 @@
     const obj = {
       id,
       name, emoji:cgState.emoji,
-      kind:cgState.kind || 'trip',
+      kind:normaliseKind(cgState.kind || currentApp || 'travel'),
       members:cgState.members,
       baseCurrency:cgState.baseCcy,
       fxRates:{...cgState.fx},
@@ -4159,36 +4509,59 @@
       groups.push(obj);
     }
     save();
-    openGroup(obj.id);
+    if (cgState.editId) openGroup(obj.id, obj.kind);
+    else backToDirectory();
   }
 
   // ── GROUP DETAIL ──
-  function openGroup(id) {
-    gid=id;
+  function openGroup(id, kind=null) {
+    const targetKind = normaliseKind(kind || Object.keys(appData).find(k => (appData[k]||[]).some(x=>x.id===id)) || currentApp || 'travel');
+    currentApp = targetKind;
+    groups = appData[targetKind] || [];
     const g=groups.find(x=>x.id===id);
     if (!g) return;
+    if (groupKind(g) !== targetKind) return;
+    gid=id;
     renderGroup(g);
     if (g.remoteShareCode) setTripUrl(g.remoteShareCode);
     show('group');
-    setTab('expenses');
+    setTab(currentApp === 'mahjong' ? 'mahjong' : 'expenses');
     startAutoSync(g);
   }
 
   function getGroup() { return groups.find(x=>x.id===gid); }
 
   function renderGroup(g) {
+    if (!currentApp || groupKind(g) !== currentApp) return;
+    if (currentApp === 'travel') renderTravelDetail(g);
+    else if (currentApp === 'general') renderGeneralDetail(g);
+    else if (currentApp === 'mahjong') renderMahjongDetail(g);
+  }
+
+  function renderTravelDetail(g) {
+    if (currentApp !== 'travel' || groupKind(g) !== 'travel') return;
+    renderStandardDetail(g);
+  }
+
+  function renderGeneralDetail(g) {
+    if (currentApp !== 'general' || groupKind(g) !== 'general') return;
+    renderStandardDetail(g);
+  }
+
+  function configureDetailShell(g) {
+    const cfg = appConfig();
+    document.querySelectorAll('#travel-detail-screen,#general-detail-screen,#mahjong-detail-screen').forEach(el => {
+      el.hidden = el.id !== `${currentApp}-detail-screen`;
+    });
     const hero=document.getElementById('ghero');
     if (hero) hero.style.background = tripCover(g);
     const icon = document.getElementById('g-icon');
-    if (icon) icon.textContent = g.emoji || '✈️';
+    if (icon) icon.textContent = g.emoji || cfg.emoji;
     const liveChip = document.getElementById('g-live-chip');
     if (liveChip) liveChip.innerHTML = `<span></span> ${g.remoteTripId ? 'Live' : 'Local'} · ${g.members.length}`;
     document.getElementById('g-title').textContent=g.name;
-    const gRegular = regularExpenses(g).length;
-    const gMj = mahjongExpenses(g).length;
-    document.getElementById('g-meta').textContent=`${groupKindLabel(g)} · ${gRegular} expenses${gMj ? ` · ${gMj} MJ` : ''} · Total ${fmt(groupTotalSpent(g),'CNY')}`;
     const addQuick = document.getElementById('g-add-quick');
-    if (addQuick) addQuick.textContent = groupKind(g)==='mahjong' ? '＋ Add mahjong' : '＋ Add expense';
+    if (addQuick) addQuick.textContent = cfg.addLabel;
 
     // bubbles
     const bb=document.getElementById('g-bubbles');
@@ -4210,18 +4583,68 @@
       document.getElementById('my-bal-label').textContent=
         v>0?'You are owed':(v<0?'You owe':'All settled');
       document.getElementById('my-bal-amount').textContent=
-        v===0?'All even':signedMoney(v,'CNY');
+        v===0?'All even':signedDisplayMoney(v,g);
     } else {
       banner.style.display='none';
     }
+  }
 
+  function renderStandardDetail(g) {
+    if (!['travel','general'].includes(currentApp) || groupKind(g) === 'mahjong') return;
+    const cfg = appConfig();
+    configureDetailShell(g);
+    document.getElementById('g-meta').textContent=`${cfg.shortLabel} · ${regularExpenses(g).length} expenses · Total ${displayFmt(groupTotalSpent(g),g)}`;
+    setDetailTabs([
+      ['expenses', cfg.expensesTab],
+      ['balances', 'Balances'],
+      ['settle', 'Settle'],
+    ]);
     renderExpenses(g);
-    renderMahjong(g);
+    document.getElementById('tp-mahjong').innerHTML = '';
     renderBalances(g);
     renderSettle(g);
   }
 
+  function renderMahjongDetail(g) {
+    if (currentApp !== 'mahjong' || groupKind(g) !== 'mahjong') return;
+    configureDetailShell(g);
+    document.getElementById('g-meta').textContent=`Mahjong session · ${g.members.length} players · ${mahjongExpenses(g).length} payouts · Settlement ${displayFmt(groupTotalSpent(g),g)}`;
+    setDetailTabs([
+      ['mahjong', 'Calculator'],
+      ['expenses', 'History'],
+      ['balances', 'Balances'],
+      ['settle', 'Settle'],
+    ]);
+    renderMahjong(g);
+    renderMahjongHistory(g);
+    renderBalances(g);
+    renderSettle(g);
+  }
+
+  function setDetailTabs(items) {
+    const allowed = new Map(items);
+    document.querySelectorAll('#sg .tab').forEach(t=>{
+      if (allowed.has(t.dataset.tab)) {
+        t.style.display = '';
+        t.textContent = allowed.get(t.dataset.tab);
+      } else {
+        t.style.display = 'none';
+        t.classList.remove('on');
+      }
+    });
+    document.querySelectorAll('#sg .tab-pane').forEach(p=>{
+      const name = p.id.replace('tp-','');
+      if (!allowed.has(name)) {
+        p.classList.remove('on');
+        p.innerHTML = '';
+      }
+    });
+  }
+
   function setTab(name) {
+    const g = getGroup();
+    if (g && groupKind(g) === 'mahjong' && !['mahjong','expenses','balances','settle'].includes(name)) name = 'mahjong';
+    if (g && groupKind(g) !== 'mahjong' && name === 'mahjong') name = 'expenses';
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
     document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('on',p.id===`tp-${name}`));
     const addBtn = document.getElementById('add-exp-btn');
@@ -4231,7 +4654,7 @@
   function openPrimaryAdd() {
     const g = getGroup();
     if (!g) return;
-    if (groupKind(g) === 'mahjong') {
+    if (currentApp === 'mahjong') {
       setTab('mahjong');
       document.getElementById('mj-single-amt')?.focus();
       return;
@@ -4240,15 +4663,20 @@
   }
 
   function renderExpenses(g) {
+    if (currentApp === 'mahjong') {
+      renderMahjongHistory(g);
+      return;
+    }
     const c=document.getElementById('tp-expenses');
-    const exps=activeExpenses(g);
-    const archived=archivedExpenses(g);
+    const exps=regularExpenses(g);
+    const archived=archivedExpenses(g).filter(e => !isMahjongExpense(e));
+    const cfg = appConfig();
 
     if (!exps.length && !archived.length) {
       c.innerHTML=`
         <div class="empty" style="padding:48px 24px;">
           <div class="icon">💳</div>
-          <p style="font-size:15px;color:var(--muted);">No expenses yet.<br>Tap ＋ to add the first one!</p>
+          <p style="font-size:15px;color:var(--muted);">${esc(cfg.expenseEmpty)}</p>
         </div>
         ${shareHTML(g)}`;
       bindShare(g);
@@ -4271,31 +4699,27 @@
         row.className='exp-row';
         const sym=SYM[e.currency]||'¥';
         const origStr=`${sym}${(e.originalAmount/100).toFixed(2)}`;
-        const cnyStr=fmt(e.cnyFen,'CNY');
-        const diff=e.currency!=='CNY';
+        const shownStr=displayFmt(e.cnyFen,g);
+        const diff=e.currency!==displayCurrency(g);
         const n=e.splitAmong.length;
         const me=g.iAm;
         const myShare=me&&e.splitAmong.includes(me)
           ? splitEvenly(e.cnyFen,e.splitAmong)[me]||0
           : 0;
         const splitLabel=e.splitAmong.length===g.members.length?'Everyone':e.splitAmong.join(', ');
-        const mj = isMahjongExpense(e);
-        const mjFrom = e.splitAmong?.[0] || '';
-        const title = mj ? (e.description || `Mahjong: ${mjFrom} pays ${e.paidBy}`) : (e.description||e.category);
-        const meta = mj
-          ? `<strong>${esc(mjFrom)}</strong> pays <strong>${esc(e.paidBy)}</strong>${e.inputtedBy ? ` · <span style="opacity:0.6">by ${esc(e.inputtedBy)}</span>` : ''}`
-          : `Paid by <strong>${esc(e.paidBy)}</strong> · ${esc(splitLabel)}${e.inputtedBy ? ` · <span style="opacity:0.6">by ${esc(e.inputtedBy)}</span>` : ''}`;
+        const title = e.description||e.category;
+        const meta = `Paid by <strong>${esc(e.paidBy)}</strong> · ${esc(splitLabel)}${e.inputtedBy ? ` · <span style="opacity:0.6">by ${esc(e.inputtedBy)}</span>` : ''}`;
 
         row.innerHTML=`
-          <div class="exp-icon">${mj ? '🀄' : (e.categoryIcon||'📦')}</div>
+          <div class="exp-icon">${e.categoryIcon||'📦'}</div>
           <div class="exp-info">
             <div class="exp-title">${esc(title)}</div>
             <div class="exp-meta">${meta}</div>
           </div>
           <div class="exp-right">
             <div class="exp-amount">
-              <div class="exp-total">${diff?origStr:cnyStr}</div>
-              <div class="exp-sub">${diff?cnyStr:(me&&myShare?fmt(myShare,'CNY')+' ea':'')}</div>
+              <div class="exp-total">${shownStr}</div>
+              <div class="exp-sub">${diff?`Paid ${origStr}`:(me&&myShare?displayFmt(myShare,g)+' ea':'')}</div>
             </div>
             <button class="del-btn edit-exp-btn" data-id="${e.id}" title="Edit expense">✎</button>
             <button class="del-btn archive-btn" data-id="${e.id}" title="Archive as paid">✓</button>
@@ -4342,26 +4766,22 @@
           row.className='exp-row archived';
           const sym=SYM[e.currency]||'¥';
           const origStr=`${sym}${(e.originalAmount/100).toFixed(2)}`;
-          const cnyStr=fmt(e.cnyFen,'CNY');
-          const diff=e.currency!=='CNY';
+          const shownStr=displayFmt(e.cnyFen,g);
+          const diff=e.currency!==displayCurrency(g);
           const splitLabel=e.splitAmong.length===g.members.length?'Everyone':e.splitAmong.join(', ');
-          const mj = isMahjongExpense(e);
-          const mjFrom = e.splitAmong?.[0] || '';
-          const title = mj ? (e.description || `Mahjong: ${mjFrom} pays ${e.paidBy}`) : (e.description||e.category);
-          const meta = mj
-            ? `<strong>${esc(mjFrom)}</strong> pays <strong>${esc(e.paidBy)}</strong> · archived`
-            : `Paid by <strong>${esc(e.paidBy)}</strong> · ${esc(splitLabel)} · archived`;
+          const title = e.description||e.category;
+          const meta = `Paid by <strong>${esc(e.paidBy)}</strong> · ${esc(splitLabel)} · archived`;
 
           row.innerHTML=`
-            <div class="exp-icon">${mj ? '🀄' : (e.categoryIcon||'📦')}</div>
+            <div class="exp-icon">${e.categoryIcon||'📦'}</div>
             <div class="exp-info">
               <div class="exp-title">${esc(title)}</div>
               <div class="exp-meta">${meta}</div>
             </div>
             <div class="exp-right">
               <div class="exp-amount">
-                <div class="exp-total">${diff?origStr:cnyStr}</div>
-                <div class="exp-sub">${diff?cnyStr:''}</div>
+                <div class="exp-total">${shownStr}</div>
+                <div class="exp-sub">${diff?`Paid ${origStr}`:''}</div>
               </div>
               <button class="del-btn edit-exp-btn" data-id="${e.id}" title="Edit expense">✎</button>
               <button class="del-btn archive-btn" data-id="${e.id}" title="Restore expense">↩</button>
@@ -4397,8 +4817,50 @@
     bindShare(g);
   }
 
+  function renderMahjongHistory(g) {
+    const c = document.getElementById('tp-expenses');
+    if (!c) return;
+    const entries = mahjongExpenses(g).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+    if (!entries.length) {
+      c.innerHTML = `
+        <div class="empty" style="padding:48px 24px;">
+          <div class="icon">🀄</div>
+          <p style="font-size:15px;color:var(--muted);">No payouts yet. Use Calculator to add the first Mahjong result.</p>
+        </div>`;
+      return;
+    }
+    c.innerHTML = entries.map(e => {
+      const from = e.splitAmong?.[0] || '';
+      const to = e.paidBy || '';
+      return `
+        <div class="exp-row">
+          <div class="exp-icon">🀄</div>
+          <div class="exp-info">
+            <div class="exp-title">${esc(e.description || 'Mahjong payout')}</div>
+            <div class="exp-meta"><strong>${esc(from)}</strong> pays <strong>${esc(to)}</strong> · ${fmtDate(e.date || today())}</div>
+          </div>
+          <div class="exp-right">
+            <div class="exp-amount"><div class="exp-total">${displayFmt(e.cnyFen || 0,g)}</div></div>
+            <button class="del-btn del-mj-exp" data-id="${e.id}" title="Delete payout">🗑</button>
+          </div>
+        </div>`;
+    }).join('');
+    c.querySelectorAll('.del-mj-exp').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const exp = g.expenses.find(e=>e.id===btn.dataset.id);
+        if (!exp) return;
+        if (!confirm(`Delete "${exp.description || 'Mahjong payout'}"?`)) return;
+        g.expenses = g.expenses.filter(e=>e.id!==exp.id);
+        deleteExpenseOnline(g, exp.id);
+        save();
+        renderGroup(g);
+        setTab('expenses');
+      });
+    });
+  }
+
   function createMahjongExpense(g, from, to, cnyFen, note='Mahjong') {
-    const ccy = g.baseCurrency || 'CNY';
+    const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
     return {
       id: uid(),
       source: 'mahjong',
@@ -4447,6 +4909,10 @@
   function renderMahjong(g) {
     const c = document.getElementById('tp-mahjong');
     if (!c) return;
+    if (currentApp !== 'mahjong') {
+      c.innerHTML = '';
+      return;
+    }
     const members = [...(g.members || [])].sort();
     const entries = mahjongExpenses(g).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
     const total = entries.reduce((s,e)=>s+(e.cnyFen||0),0);
@@ -4465,7 +4931,7 @@
             <div class="mj-meta">${esc(e.description || 'Mahjong transfer')} · ${fmtDate(e.date || today())}</div>
           </div>
           <div class="mj-actions">
-            <div class="mj-amount num">${fmt(e.cnyFen || 0, 'CNY')}</div>
+            <div class="mj-amount num">${displayFmt(e.cnyFen || 0, g)}</div>
             <button class="del-btn del-mj-exp" data-id="${e.id}" title="Delete mahjong transfer">🗑</button>
           </div>
         </div>`;
@@ -4480,7 +4946,7 @@
         <div class="mj-card">
           <div class="mj-summary">
             <div><div class="mj-summary-val num">${entries.length}</div><div class="mj-summary-label">Transfers</div></div>
-            <div><div class="mj-summary-val num">${fmt(total,'CNY')}</div><div class="mj-summary-label">MJ total</div></div>
+            <div><div class="mj-summary-val num">${displayFmt(total,g)}</div><div class="mj-summary-label">MJ total</div></div>
             <div><div class="mj-summary-val num">${members.length}</div><div class="mj-summary-label">Players</div></div>
           </div>
         </div>
@@ -4491,14 +4957,14 @@
             <div class="mj-field"><label>Loser pays</label><select id="mj-single-from">${options}</select></div>
             <div class="mj-field"><label>Winner receives</label><select id="mj-single-to">${options}</select></div>
           </div>
-          <div class="mj-field"><label>Amount (${esc(g.baseCurrency || 'CNY')})</label><input id="mj-single-amt" inputmode="decimal" placeholder="0.00"></div>
+          <div class="mj-field"><label>Amount (${esc(g.baseCurrency || DEFAULT_BASE_CURRENCY)})</label><input id="mj-single-amt" inputmode="decimal" placeholder="0.00"></div>
           <button class="btn btn-green" id="mj-add-single" type="button">Add transfer</button>
         </div>
 
         <div class="mj-card">
           <div class="mj-card-title">Multi-split pot</div>
           <div class="hint" style="margin-bottom:12px;">Split one total pot across multiple losers and winners with exact cents.</div>
-          <div class="mj-field"><label>Total amount (${esc(g.baseCurrency || 'CNY')})</label><input id="mj-multi-amt" inputmode="decimal" placeholder="0.00"></div>
+          <div class="mj-field"><label>Total amount (${esc(g.baseCurrency || DEFAULT_BASE_CURRENCY)})</label><input id="mj-multi-amt" inputmode="decimal" placeholder="0.00"></div>
           <div class="sec-label">Losers</div>
           <div class="mj-chip-row">${chips}</div>
           <div class="sec-label">Winners</div>
@@ -4525,7 +4991,7 @@
       if (!from || !to) return alert('Add at least two players first.');
       if (from === to) return alert('Loser and winner must be different people.');
       if (!minor) return alert('Enter a valid amount.');
-      const cnyFen = toCny(minor, g.baseCurrency || 'CNY', g.fxRates);
+      const cnyFen = toCny(minor, g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates);
       saveMahjongExpenses(g, [createMahjongExpense(g, from, to, cnyFen, `Mahjong: ${from} pays ${to}`)]);
     });
     c.querySelectorAll('[data-mj-loser]').forEach(btn=>{
@@ -4556,7 +5022,7 @@
       if (!minor) return alert('Enter a valid total amount.');
       if (!losers.length) return alert('Pick at least one loser.');
       if (!winners.length) return alert('Pick at least one winner.');
-      const cnyFen = toCny(minor, g.baseCurrency || 'CNY', g.fxRates);
+      const cnyFen = toCny(minor, g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates);
       const exps = addMahjongMulti(g, cnyFen, losers, winners);
       mjLosers = new Set();
       mjWinners = new Set();
@@ -4577,9 +5043,10 @@
   }
 
   function shareHTML(g) {
+    const cfg = appConfig();
     const online = g.remoteTripId
-      ? `<div class="hint" style="margin-bottom:10px;">Online trip ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
-      : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online Trip</button>`;
+      ? `<div class="hint" style="margin-bottom:10px;">Online ${esc(cfg.itemName)} ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
+      : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online ${esc(cfg.itemName)}</button>`;
     const shareButtons = g.remoteTripId
       ? `<button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">Share Join Code</button>`
       : `<button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">Share Backup Code</button>
@@ -4587,7 +5054,7 @@
     return `
       <div class="share-sec">
         <div class="hint">
-          For live sharing, create an online trip and send the online code. Only signed-in users who join with this code can see this trip.
+          For live sharing, create an online ${esc(cfg.itemName)} and send the online code. Only signed-in users who join with this code can see this ${esc(cfg.itemName)}.
         </div>
         ${online}
         <div class="share-btn-row">
@@ -4712,10 +5179,10 @@
       startAutoSync(g);
       if (showAlert) {
         const url = tripInviteUrl(g.remoteShareCode);
-        const msg = `Online trip ready. Code: ${g.remoteShareCode}`;
+        const msg = `Online ${appConfig(groupKind(g)).itemName} ready. Code: ${g.remoteShareCode}`;
         navigator.clipboard?.writeText(url).catch(()=>{});
         setTripUrl(g.remoteShareCode);
-        alert(`${msg}\n\nInvite link copied if your browser allows it:\n${url}\n\nFriends can open this link, sign in, and join the trip.`);
+        alert(`${msg}\n\nInvite link copied if your browser allows it:\n${url}\n\nFriends can open this link, sign in, and join this record.`);
       }
     } catch(err) {
       if (showAlert) alert(`Online publish failed:\n${err.message}`);
@@ -4724,7 +5191,7 @@
 
   async function syncGroupOnline(g, silent=true) {
     if (!onlineReady() || !g.remoteTripId) {
-      if (!silent) alert('This trip is not online yet.');
+      if (!silent) alert('This record is not online yet.');
       return;
     }
     if (!isSignedIn()) {
@@ -4734,7 +5201,7 @@
     try {
       const tripRows = await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}&select=*`);
       const trip = tripRows?.[0];
-      if (!trip) throw new Error('Online trip was not found.');
+      if (!trip) throw new Error('Online record was not found.');
 
       const members = await db(`members?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
       const expenses = await db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
@@ -4744,7 +5211,7 @@
       g.emoji = trip.emoji || g.emoji;
       g.coverPhoto = trip.cover_photo || null;
       g.baseCurrency = trip.base_currency || g.baseCurrency;
-      g.fxRates = trip.fx_rates || g.fxRates;
+      g.fxRates = { ...DEFAULT_FX_RATES, ...(g.fxRates || {}), ...(trip.fx_rates || {}) };
       g.remoteShareCode = trip.share_code || g.remoteShareCode;
       g.creatorUserId = g.creatorUserId || trip.created_by_user || null;
       g.finalizedAt = trip.finalized_at || undefined;
@@ -4762,7 +5229,7 @@
 
       save();
       if (gid === g.id) renderGroup(g);
-      if (!silent) alert('Online trip synced.');
+      if (!silent) alert('Online record synced.');
     } catch(err) {
       if (!silent) alert(`Online sync failed:\n${err.message}`);
     }
@@ -4774,7 +5241,7 @@
       return;
     }
     if (!requireSignIn()) return;
-    const code = (codeOverride || prompt('Enter the online trip code:', pendingJoinCode || urlTripCode()) || '').trim().toUpperCase();
+    const code = (codeOverride || prompt('Enter the online code:', pendingJoinCode || urlTripCode()) || '').trim().toUpperCase();
     if (!code) return;
     try {
       const tripRows = await db('rpc/join_trip_by_code', {
@@ -4782,7 +5249,7 @@
         body:{ p_share_code:code, p_display_name:profile.name || authSession.user.email?.split('@')[0] || 'Member' },
       });
       const trip = tripRows?.[0];
-      if (!trip) throw new Error('No online trip found for that code.');
+      if (!trip) throw new Error('No online record found for that code.');
 
       let g = groups.find(x=>x.remoteTripId===trip.id);
       if (!g) {
@@ -4794,8 +5261,8 @@
           emoji: trip.emoji || '🌏',
           coverPhoto: trip.cover_photo || null,
           members: [],
-          baseCurrency: trip.base_currency || 'CNY',
-          fxRates: trip.fx_rates || {SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93},
+          baseCurrency: trip.base_currency || DEFAULT_BASE_CURRENCY,
+          fxRates: { ...DEFAULT_FX_RATES, ...(trip.fx_rates || {}) },
           iAm: profile.name || null,
           expenses: [],
           payments: [],
@@ -4824,8 +5291,8 @@
         emoji: trip.emoji || '🌏',
         coverPhoto: trip.cover_photo || null,
         members: [],
-        baseCurrency: trip.base_currency || 'CNY',
-        fxRates: trip.fx_rates || {SGD:5.40,USD:7.25,MYR:1.60,HKD:0.93},
+        baseCurrency: trip.base_currency || DEFAULT_BASE_CURRENCY,
+        fxRates: { ...DEFAULT_FX_RATES, ...(trip.fx_rates || {}) },
         iAm: profile.name || null,
         expenses: [],
         payments: [],
@@ -4836,7 +5303,7 @@
       await Promise.all(groups.map(g=>syncGroupOnline(g,true)));
       save();
     } catch(err) {
-      if (!silent) alert(`Could not load your online trips:\n${err.message}`);
+      if (!silent) alert(`Could not load your online records:\n${err.message}`);
     }
   }
 
@@ -4893,7 +5360,8 @@
     const c=document.getElementById('tp-balances');
     const net=balances(g);
     if (!Object.keys(net).length||!activeExpenses(g).length) {
-      c.innerHTML=`<div class="empty" style="padding:48px 24px;"><div class="icon">⚖️</div><p style="font-size:15px;color:var(--muted);">Add expenses to see who owes what.</p></div>`;
+      const noun = currentApp === 'mahjong' ? 'payouts' : 'expenses';
+      c.innerHTML=`<div class="empty" style="padding:48px 24px;"><div class="icon">⚖️</div><p style="font-size:15px;color:var(--muted);">Add ${noun} to see who owes what.</p></div>`;
       return;
     }
     c.innerHTML='';
@@ -4905,53 +5373,55 @@
       row.innerHTML+=`
         <div class="bal-info">
           <div class="bal-name">${name}</div>
-          <div class="bal-detail">${label} · ${fmt(fromCny(Math.abs(v),'SGD',g.fxRates),'SGD')}</div>
+          <div class="bal-detail">${label} · ${displayFmt(Math.abs(v),g)}</div>
         </div>
-        <div class="bal-amount" style="color:${col};">${v===0?'🎉':fmt(Math.abs(v),'CNY')}</div>`;
+        <div class="bal-amount" style="color:${col};">${v===0?'🎉':displayFmt(Math.abs(v),g)}</div>`;
       c.appendChild(row);
     });
   }
 
-  function settlementDetailsHTML(g,tx) {
+  function settlementDetailsHTML(g,tx,mode='min') {
     const summary = expenseSummaryForSettlement(g,tx);
     const fromName = esc(tx.from);
     const toName = esc(tx.to);
     const owedRows = summary.fromOwesRows.map(x=>`
       <div class="settle-summary-row">
         <span><strong>${esc(x.paidBy)}</strong> paid for ${esc(x.title)}<br>${fmtDate(x.date)} - ${fromName}'s share</span>
-        <span>${fmt(x.share,'CNY')} / ${fmt(fromCny(x.share,'SGD',g.fxRates),'SGD')}</span>
+        <span>${displayFmt(x.share,g)}</span>
       </div>`).join('');
     const offsetRows = summary.toOwesRows.map(x=>`
       <div class="settle-summary-row">
         <span><strong>${esc(x.paidBy)}</strong> paid for ${esc(x.title)}<br>${fmtDate(x.date)} - ${toName}'s share, offset</span>
-        <span>-${fmt(x.share,'CNY')}</span>
+        <span>-${displayFmt(x.share,g)}</span>
       </div>`).join('');
     const paymentRows = `
-      ${summary.paidFromTo?`<div class="settle-summary-row"><span>Already paid by ${fromName} to ${toName}</span><span>-${fmt(summary.paidFromTo,'CNY')}</span></div>`:''}
-      ${summary.paidToFrom?`<div class="settle-summary-row"><span>Already paid by ${toName} to ${fromName}</span><span>+${fmt(summary.paidToFrom,'CNY')}</span></div>`:''}`;
+      ${summary.paidFromTo?`<div class="settle-summary-row"><span>Already paid by ${fromName} to ${toName}</span><span>-${displayFmt(summary.paidFromTo,g)}</span></div>`:''}
+      ${summary.paidToFrom?`<div class="settle-summary-row"><span>Already paid by ${toName} to ${fromName}</span><span>+${displayFmt(summary.paidToFrom,g)}</span></div>`:''}`;
     const equation = `
       <div class="settle-summary-row">
         <span><strong>Calculation</strong><br>
-          ${fromName}'s share of ${toName}'s expenses ${fmt(summary.fromOwesTotal,'CNY')}
-          - ${toName}'s share of ${fromName}'s expenses ${fmt(summary.toOwesTotal,'CNY')}
-          ${summary.paidFromTo?`- paid ${fmt(summary.paidFromTo,'CNY')}`:''}
-          ${summary.paidToFrom?`+ reverse paid ${fmt(summary.paidToFrom,'CNY')}`:''}
+          ${fromName}'s share of ${toName}'s entries ${displayFmt(summary.fromOwesTotal,g)}
+          - ${toName}'s share of ${fromName}'s entries ${displayFmt(summary.toOwesTotal,g)}
+          ${summary.paidFromTo?`- paid ${displayFmt(summary.paidFromTo,g)}`:''}
+          ${summary.paidToFrom?`+ reverse paid ${displayFmt(summary.paidToFrom,g)}`:''}
         </span>
-        <span>${fmt(summary.directNet,'CNY')}</span>
+        <span>${displayFmt(summary.directNet,g)}</span>
       </div>
-      ${Math.abs(summary.directNet - tx.amt) > 1 ? `<div class="settle-summary-row"><span>This payment is ${fmt(tx.amt,'CNY')} because SplitTrip minimizes payments across the whole trip, not only this pair.</span><span></span></div>` : ''}`;
+      ${mode === 'min' && Math.abs(summary.directNet - tx.amt) > 1 ? `<div class="settle-summary-row"><span>This payment is ${displayFmt(tx.amt,g)} because the calculator minimizes payments across the whole ${esc(appConfig().itemName)}, not only this pair.</span><span></span></div>` : ''}`;
     const rows = `${owedRows}${offsetRows}${paymentRows}`.trim();
     return rows
       ? `${owedRows}${offsetRows}${paymentRows}${equation}`
-      : `<div class="settle-summary-row"><span>This settlement comes from the net total across all group expenses and previous payments.</span><span>${fmt(tx.amt,'CNY')}</span></div>`;
+      : `<div class="settle-summary-row"><span>This settlement comes from the net total across all active entries and previous payments.</span><span>${displayFmt(tx.amt,g)}</span></div>`;
   }
 
-  function settleTransferCard(g,tx) {
+  function settleTransferCard(g,tx,mode='min') {
     const card=document.createElement('div');
     card.className='settle-card';
     const fromAv=av(tx.from,'av-md');
     const toAv=av(tx.to,'av-md');
-    const sgd = fromCny(tx.amt,'SGD',g.fxRates);
+    const dccy = displayCurrency(g);
+    const displayAmt = displayMinor(tx.amt,g);
+    const cnyAmt = tx.amt;
     card.innerHTML=`
       <div class="settle-transfer-row">
         <div class="settle-route" aria-hidden="true">
@@ -4961,24 +5431,24 @@
         </div>
         <div class="settle-copy">
           <div class="settle-title">${esc(tx.from)} pays ${esc(tx.to)}</div>
-          <div class="settle-context">What is ${esc(tx.from)} paying ${esc(tx.to)} for?</div>
+          <div class="settle-context">${mode === 'activity' ? 'Direct activity total between these two people.' : `What is ${esc(tx.from)} paying ${esc(tx.to)} for?`}</div>
         </div>
         <div class="settle-amount-wrap">
-          <div class="settle-amount num">${fmt(tx.amt,'CNY')}</div>
-          <div class="settle-alt num">${fmt(sgd,'SGD')}</div>
+          <div class="settle-amount num">${fmt(displayAmt,dccy)}</div>
+          ${dccy !== 'CNY' ? `<div class="settle-alt num">${fmt(cnyAmt,'CNY')}</div>` : ''}
         </div>
       </div>
       <div class="settle-actions">
         <select class="settle-select" aria-label="Payment currency">
-          <option value="CNY">Pay in RMB (${fmt(tx.amt,'CNY')})</option>
-          <option value="SGD">Pay in SGD (${fmt(sgd,'SGD')})</option>
+          <option value="${dccy}">Pay in ${esc(dccy)} (${fmt(displayAmt,dccy)})</option>
+          ${dccy !== 'CNY' ? `<option value="CNY">Pay in RMB (${fmt(cnyAmt,'CNY')})</option>` : ''}
         </select>
         <button class="btn btn-green btn-sm js-paid">Paid</button>
       </div>
       <div class="settle-summary">
         <details open>
           <summary>What is ${esc(tx.from)} paying ${esc(tx.to)} for?</summary>
-          ${settlementDetailsHTML(g,tx)}
+          ${settlementDetailsHTML(g,tx,mode)}
         </details>
       </div>`;
     card.querySelector('.js-paid').addEventListener('click', ()=>{
@@ -4988,13 +5458,13 @@
     return card;
   }
 
-  function appendSettleSection(shell,title,txs,g) {
+  function appendSettleSection(shell,title,txs,g,mode='min') {
     if (!txs.length) return;
     const section=document.createElement('section');
     section.className='settle-section';
     const groupCard=document.createElement('div');
     groupCard.className='settle-group-card';
-    txs.forEach(tx=>groupCard.appendChild(settleTransferCard(g,tx)));
+    txs.forEach(tx=>groupCard.appendChild(settleTransferCard(g,tx,mode)));
     section.innerHTML=`<div class="settle-section-label">${esc(title)}</div>`;
     section.appendChild(groupCard);
     shell.appendChild(section);
@@ -5006,10 +5476,10 @@
     const exps = activeExpenses(g);
     const total = groupTotalSpent(g);
     const lines = [
-      `SplitTrip final bill - ${g.name}`,
+      `${appConfig().label} settlement - ${g.name}`,
       '',
-      `Total spent: ${fmt(total,'CNY')} / ${fmt(fromCny(total,'SGD',g.fxRates),'SGD')}`,
-      `Active expenses: ${exps.length}`,
+      `Total spent: ${displayFmt(total,g)}`,
+      `Active entries: ${exps.length}`,
       `Members: ${(g.members||[]).join(', ') || 'No members'}`,
       '',
       'Balances:',
@@ -5019,7 +5489,7 @@
     if (balanceRows.length) {
       balanceRows.forEach(([name,amount]) => {
         const label = amount > 0 ? 'gets back' : amount < 0 ? 'owes' : 'is settled';
-        lines.push(`- ${name} ${label} ${amount ? fmt(Math.abs(amount),'CNY') : ''}`.trim());
+        lines.push(`- ${name} ${label} ${amount ? displayFmt(Math.abs(amount),g) : ''}`.trim());
       });
     } else {
       lines.push('- No balances yet');
@@ -5030,22 +5500,22 @@
       txs.forEach((tx,i) => {
         const summary = expenseSummaryForSettlement(g,tx);
         const directText = summary.fromOwesRows.slice(0,3).map(x =>
-          `${x.title} (${fmt(x.share,'CNY')})`
+          `${x.title} (${displayFmt(x.share,g)})`
         ).join('; ');
         const offsetText = summary.toOwesRows.length
-          ? `; offset by ${summary.toOwesRows.slice(0,2).map(x=>`${x.title} (${fmt(x.share,'CNY')})`).join('; ')}`
+          ? `; offset by ${summary.toOwesRows.slice(0,2).map(x=>`${x.title} (${displayFmt(x.share,g)})`).join('; ')}`
           : '';
         const reason = directText
           ? `What ${tx.from} is paying ${tx.to} for: ${directText}${offsetText}`
-          : `What ${tx.from} is paying ${tx.to} for: net balance across all trip expenses and previous payments.`;
-        lines.push(`${i+1}. ${tx.from} pays ${tx.to}: ${fmt(tx.amt,'CNY')} / ${fmt(fromCny(tx.amt,'SGD',g.fxRates),'SGD')}`);
+          : `What ${tx.from} is paying ${tx.to} for: net balance across all active entries and previous payments.`;
+        lines.push(`${i+1}. ${tx.from} pays ${tx.to}: ${displayFmt(tx.amt,g)}`);
         lines.push(`   ${reason}`);
       });
     } else {
       lines.push('Everyone is settled. No payments needed.');
     }
 
-    lines.push('', 'Sent from SplitTrip');
+    lines.push('', `Sent from ${appConfig().label}`);
     return lines.join('\n');
   }
 
@@ -5066,23 +5536,44 @@
   function renderSettle(g) {
     const c=document.getElementById('tp-settle');
     const net=balances(g);
-    const txs=settlement(net);
+    const mode = settleViewMode === 'activity' ? 'activity' : 'min';
+    const txs=mode === 'activity' ? activitySettlement(g) : settlement(net);
     const has=activeExpenses(g).length>0;
     const transferLabel = `${txs.length} transfer${txs.length===1?'':'s'}`;
+    const heroLabel = mode === 'activity' ? 'Activity-based payments' : 'Minimum payments';
+    const heroSub = mode === 'activity'
+      ? `Shows each direct person-to-person balance from the ${esc(appConfig().itemName)} activity, with all shared entries and previous payments summed by pair.`
+      : `Settles this ${esc(appConfig().itemName)} in the fewest transactions, with the reason for every payment shown underneath.`;
     c.innerHTML='';
 
     const shell=document.createElement('div');
     shell.className='settle-shell';
     shell.innerHTML=`
       <section class="settle-hero">
-        <div class="settle-hero-label">Minimum payments</div>
+        <div class="settle-hero-label">${heroLabel}</div>
         <div class="settle-hero-number num">${transferLabel}</div>
-        <div class="settle-hero-sub">Settles the entire trip in the fewest transactions, with the reason for every payment shown underneath.</div>
+        <div class="settle-hero-sub">${heroSub}</div>
+        <div class="settle-mode-toggle" role="group" aria-label="Settlement view">
+          <button class="${mode === 'min' ? 'on' : ''}" data-settle-mode="min" type="button">
+            Minimize transfers
+            <small>Fewest payments overall</small>
+          </button>
+          <button class="${mode === 'activity' ? 'on' : ''}" data-settle-mode="activity" type="button">
+            By activity
+            <small>Who owes who directly</small>
+          </button>
+        </div>
         <div class="settle-share-row">
           <button class="btn btn-green btn-sm" id="settle-whatsapp-share" type="button">Share final bill to WhatsApp</button>
         </div>
       </section>`;
     shell.querySelector('#settle-whatsapp-share')?.addEventListener('click', ()=>shareSettleToWhatsApp(g));
+    shell.querySelectorAll('[data-settle-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        settleViewMode = btn.dataset.settleMode === 'activity' ? 'activity' : 'min';
+        renderSettle(g);
+      });
+    });
 
     if (!txs.length) {
       shell.innerHTML+=`
@@ -5097,11 +5588,11 @@
 
     const me=(g.iAm || profile.name || '').trim();
     if (me) {
-      appendSettleSection(shell,'Owed to you',txs.filter(tx=>tx.to===me),g);
-      appendSettleSection(shell,'You pay',txs.filter(tx=>tx.from===me),g);
-      appendSettleSection(shell,'Between others',txs.filter(tx=>tx.from!==me && tx.to!==me),g);
+      appendSettleSection(shell,'Owed to you',txs.filter(tx=>tx.to===me),g,mode);
+      appendSettleSection(shell,'You pay',txs.filter(tx=>tx.from===me),g,mode);
+      appendSettleSection(shell,'Between others',txs.filter(tx=>tx.from!==me && tx.to!==me),g,mode);
     } else {
-      appendSettleSection(shell,'Payments',txs,g);
+      appendSettleSection(shell,'Payments',txs,g,mode);
     }
 
     c.appendChild(shell);
@@ -5219,14 +5710,15 @@
 
   function addArchiveSettledButton(container,g) {
     if (!activeExpenses(g).length) return;
+    const noun = currentApp === 'mahjong' ? 'payouts' : 'expenses';
     const wrap=document.createElement('div');
     wrap.className='share-sec';
     wrap.innerHTML=`
-      <div class="hint">After everyone has made the payments above, archive the active expenses. Archived expenses stay in history but no longer affect balances.</div>
-      <button class="btn btn-green btn-sm js-archive-paid" style="font-size:13px;">Archive active expenses as paid</button>`;
+      <div class="hint">After everyone has made the payments above, archive the active ${noun}. Archived ${noun} stay in history but no longer affect balances.</div>
+      <button class="btn btn-green btn-sm js-archive-paid" style="font-size:13px;">Archive active ${noun} as paid</button>`;
     container.appendChild(wrap);
     wrap.querySelector('.js-archive-paid').addEventListener('click', ()=>{
-      if (!confirm('Archive all active expenses as paid? This keeps them in history and clears them from balances.')) return;
+      if (!confirm(`Archive all active ${noun} as paid? This keeps them in history and clears them from balances.`)) return;
       const now=new Date().toISOString();
       (g.expenses||[]).forEach(e=>{ if (!e.archivedAt) e.archivedAt=now; });
       (g.payments||[]).forEach(p=>{ if (!p.archivedAt) p.archivedAt=now; });
@@ -5259,6 +5751,7 @@
   ];
 
   function openWizard(editExpenseId=null) {
+    if (currentApp === 'mahjong') return;
     const g=getGroup();
     if (!g) return;
     const existing = editExpenseId ? (g.expenses||[]).find(e=>e.id===editExpenseId) : null;
@@ -5270,7 +5763,7 @@
         catIcon:existing?.categoryIcon || null,
         desc:existing?.description || '',
         amtStr:existing ? ((existing.originalAmount||0)/100).toFixed(2).replace(/\.00$/,'') : '',
-        ccy:existing?.currency || g.baseCurrency || 'CNY',
+        ccy:existing?.currency || g.baseCurrency || DEFAULT_BASE_CURRENCY,
         paidBy:existing?.paidBy || g.iAm || g.members[0] || null,
         split:existing?.splitAmong?.length ? [...existing.splitAmong] : [...g.members],
         everyone:existing?.splitAmong?.length ? existing.splitAmong.length===g.members.length : true,
@@ -5316,7 +5809,7 @@
   function wizCat(body) {
     body.innerHTML='<div class="cat-grid" id="cat-grid"></div>';
     const grid=document.getElementById('cat-grid');
-    CATS.forEach(cat=>{
+    currentCategories().forEach(cat=>{
       const tile=document.createElement('div');
       tile.className='cat-tile'+(wiz.data.cat===cat.n?' sel':'');
       tile.innerHTML=`<div class="cat-icon">${cat.i}</div><div class="cat-name">${cat.n}</div>`;
@@ -5331,7 +5824,7 @@
   }
 
   function wizDesc(body) {
-    const sugg=SUGGESTS[wiz.data.cat]||['Expense'];
+    const sugg=currentSuggests()[wiz.data.cat]||['Expense'];
     body.innerHTML=`
       <div class="desc-body">
         <input type="text" class="field" id="desc-inp"
@@ -5483,18 +5976,19 @@
     const sym=SYM[wiz.data.ccy]||'¥';
     const splitLabel=wiz.data.split.length===(g?.members.length||0)?'Everyone':wiz.data.split.join(', ');
     const shares=splitEvenly(cnyFen,wiz.data.split);
+    const inputMatchesDisplay = wiz.data.ccy === displayCurrency(g);
 
     const bdRows=wiz.data.split.map(name=>`
       <div class="bdr-row">
         <span class="bdr-name">${name}</span>
-        <span class="bdr-amt">${fmt(shares[name]||0,'CNY')}</span>
+        <span class="bdr-amt">${displayFmt(shares[name]||0,g)}</span>
       </div>`).join('');
 
     body.innerHTML=`
       <div class="confirm-body">
         <div class="confirm-big">
           <div class="ca">${sym}${wiz.data.amtStr||'0.00'}</div>
-          ${wiz.data.ccy!=='CNY'?`<div style="font-size:14px;color:var(--muted);margin-top:6px;">≈ ${fmt(cnyFen,'CNY')}</div>`:''}
+          ${!inputMatchesDisplay?`<div style="font-size:14px;color:var(--muted);margin-top:6px;">≈ ${displayFmt(cnyFen,g)}</div>`:''}
           <div class="cb">${wiz.data.catIcon||''} ${wiz.data.cat||'Expense'}</div>
         </div>
         <div class="confirm-row">
@@ -5515,7 +6009,7 @@
           <div class="ca-icon">›</div>
         </div>
         <div class="breakdown">
-          <div class="bdr-title">Per person breakdown (CNY)</div>
+          <div class="bdr-title">Per person breakdown (${esc(displayCurrency(g))})</div>
           ${bdRows}
         </div>
       </div>`;
@@ -5595,20 +6089,20 @@
     if (g.remoteShareCode) {
       const url = tripInviteUrl(g.remoteShareCode);
       if (navigator.share) {
-        navigator.share({title:g.name,text:`Join "${g.name}" on SplitTrip:\n${url}`,url}).catch(()=>{});
+        navigator.share({title:g.name,text:`Join "${g.name}" on SplitMoney:\n${url}`,url}).catch(()=>{});
       } else {
         navigator.clipboard?.writeText(url)
-          .then(()=>alert('Join link copied. Signed-in users with this code can join the trip.'))
+          .then(()=>alert('Join link copied. Signed-in users with this code can join this record.'))
           .catch(()=>prompt('Copy this invite link:',url));
       }
       return;
     }
     const code=btoa(unescape(encodeURIComponent(JSON.stringify({st:true,g}))));
     if (navigator.share) {
-      navigator.share({title:g.name,text:`SplitTrip local backup for "${g.name}":\n\n${code}`}).catch(()=>{});
+      navigator.share({title:g.name,text:`SplitMoney local backup for "${g.name}":\n\n${code}`}).catch(()=>{});
     } else {
       navigator.clipboard?.writeText(code)
-        .then(()=>alert('Backup code copied. This is only for local/offline backup transfer. Online trips use owner-approved join codes.'))
+        .then(()=>alert('Backup code copied. This is only for local/offline backup transfer. Online records use owner-approved join codes.'))
         .catch(()=>prompt('Copy this local backup code:',code));
     }
   }
@@ -5637,7 +6131,7 @@
   }
 
   function exportAll() {
-    const blob=new Blob([JSON.stringify({splittrip_backup:true,exportedAt:new Date().toISOString(),groups},null,2)],{type:'application/json'});
+    const blob=new Blob([JSON.stringify({splitmoney_backup:true,splittrip_backup:true,exportedAt:new Date().toISOString(),appData},null,2)],{type:'application/json'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
     a.download=`splittrip_backup_${today()}.json`;
@@ -5650,19 +6144,35 @@
     reader.onload=ev=>{
       try {
         const d=JSON.parse(ev.target.result);
-        if (d.splittrip_backup&&Array.isArray(d.groups)) {
-          const ids=new Set(groups.map(g=>g.id));
-          d.groups.forEach(g=>{
-            if (ids.has(g.id)) {
-              const t=groups.find(x=>x.id===g.id);
-              const ex=new Set(t.expenses.map(e=>e.id));
-              t.expenses.push(...(g.expenses||[]).filter(e=>!ex.has(e.id)));
-              if (!t.payments) t.payments=[];
-              const pay=new Set(t.payments.map(p=>p.id));
-              t.payments.push(...(g.payments||[]).filter(p=>!pay.has(p.id)));
-            } else { groups.push(g); }
+        if ((d.splitmoney_backup || d.splittrip_backup) && (d.appData || Array.isArray(d.groups))) {
+          const incoming = d.appData || { travel:[], general:[], mahjong:[] };
+          if (Array.isArray(d.groups)) {
+            d.groups.forEach(g=>{
+              const kind = inferLegacyKind(g);
+              if (!incoming[kind]) incoming[kind] = [];
+              incoming[kind].push(g);
+            });
+          }
+          Object.keys(APP_CONFIG).forEach(kind=>{
+            const bucket = appData[kind] || [];
+            const ids = new Set(bucket.map(g=>g.id));
+            (incoming[kind] || []).map(g=>normaliseRecord(g, kind)).forEach(g=>{
+              if (ids.has(g.id)) {
+                const t=bucket.find(x=>x.id===g.id);
+                const ex=new Set((t.expenses||[]).map(e=>e.id));
+                t.expenses.push(...(g.expenses||[]).filter(e=>!ex.has(e.id)));
+                if (!t.payments) t.payments=[];
+                const pay=new Set(t.payments.map(p=>p.id));
+                t.payments.push(...(g.payments||[]).filter(p=>!pay.has(p.id)));
+              } else {
+                bucket.push(g);
+                ids.add(g.id);
+              }
+            });
+            appData[kind] = bucket;
+            try { localStorage.setItem(STORAGE_KEYS[kind], JSON.stringify(bucket)); } catch(e){}
           });
-          save(); renderHome();
+          renderHome();
           alert('✅ Import successful!');
         }
       } catch(err) { alert('Invalid backup file.'); }
@@ -5674,7 +6184,14 @@
   // ── BIND EVENTS ──
   function bind() {
     // Home
-    document.getElementById('new-group-btn').addEventListener('click', openSplitChoice);
+    document.getElementById('new-group-btn').addEventListener('click', openCreateMenu);
+    document.getElementById('create-menu-close').addEventListener('click', closeCreateMenu);
+    document.getElementById('create-menu').addEventListener('click', e=>{
+      if (e.target.id === 'create-menu') closeCreateMenu();
+    });
+    document.querySelectorAll('[data-create-kind]').forEach(btn=>{
+      btn.addEventListener('click', ()=>openCreate(null, btn.dataset.createKind));
+    });
     document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
     document.getElementById('settings-btn').addEventListener('click', openSettings);
     document.getElementById('settings-close').addEventListener('click', closeSettings);
@@ -5698,22 +6215,9 @@
       renderHome();
     });
     document.getElementById('profile-settings-btn').addEventListener('click', openSettings);
-    document.getElementById('choice-back').addEventListener('click', ()=>{
-      show('home');
-      renderHome();
-    });
-    document.querySelectorAll('[data-choice-kind]').forEach(btn=>{
-      btn.addEventListener('click', ()=>openCreate(null, btn.dataset.choiceKind));
-    });
-    document.querySelectorAll('[data-home-tab]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        homeTripTab = btn.dataset.homeTab;
-        renderHome();
-      });
-    });
 
     // Create group
-    document.getElementById('cg-back').addEventListener('click', ()=>{ show('home'); renderHome(); });
+    document.getElementById('cg-back').addEventListener('click', backToDirectory);
     document.getElementById('cg-save').addEventListener('click', doSaveGroup);
     document.getElementById('gname').addEventListener('input', setCoverPreview);
     document.getElementById('cover-photo-btn').addEventListener('click', ()=>document.getElementById('cover-photo-input').click());
@@ -5751,9 +6255,8 @@
 
     // Group detail
     document.getElementById('g-back').addEventListener('click', ()=>{
-      if (syncTimer) { clearInterval(syncTimer); syncTimer=null; }
       clearTripUrl();
-      show('home'); renderHome();
+      backToDirectory();
     });
     document.getElementById('g-edit').addEventListener('click', ()=>openCreate(gid));
     document.getElementById('g-currency').addEventListener('click', ()=>openCreate(gid));
@@ -5783,12 +6286,6 @@
   ensureProfileName();
   bind();
   renderHome();
-  if (onlineReady() && isSignedIn()) {
-    loadMyOnlineTrips(true).then(async ()=>{
-      if (pendingJoinCode) await joinOnlineTrip(pendingJoinCode);
-      else renderHome();
-    });
-  }
   show('home');
 })();
 </script>
