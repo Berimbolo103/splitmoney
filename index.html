@@ -491,7 +491,12 @@
       font-size: 13px; color: var(--muted); text-align: center;
       line-height: 1.5; margin-bottom: 12px;
     }
-    .share-btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .share-btn-row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+    .share-sec .btn { width: 100%; justify-content: center; }
+    .manager-list { display: grid; gap: 8px; margin-top: 12px; }
+    .manager-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+    .manager-name { font-size: 13px; font-weight: 800; }
+    .manager-role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 
     .auth-card {
       margin: 16px; padding: 16px; background: var(--card);
@@ -2792,13 +2797,12 @@
           <img class="app-logo" src="splitlah-logo.png" alt="SplitLah">
         </div>
         <div class="home-actions">
-          <button class="theme-toggle-btn" id="theme-toggle-btn" title="Switch theme">D</button>
           <button class="theme-toggle-btn" id="settings-btn" title="Settings">⚙</button>
           <button class="home-avatar-btn" id="home-avatar-btn" title="Profile">YA</button>
         </div>
       </div>
 
-      <section class="home-hero">
+      <section class="home-hero" style="display:none;">
         <div class="home-app-label" id="hello-user">Split Directory</div>
         <h1 class="num" id="home-net-balance">My Splits</h1>
         <div class="balance-pill-row" id="directory-balance-row">
@@ -3324,8 +3328,31 @@
     return APP_CONFIG[kind] ? kind : 'travel';
   }
 
+  function splitKindIdentity(g, fallback='travel') {
+    const stored = normaliseKind(g?.kind || fallback || 'travel');
+    const exps = Array.isArray(g?.expenses) ? g.expenses : [];
+    const label = `${g?.name || ''} ${g?.emoji || ''} ${(g?.members || []).join(' ')}`.toLowerCase();
+    const expenseText = exps.map(e => `${e.category || ''} ${e.description || ''} ${e.categoryIcon || ''}`).join(' ').toLowerCase();
+    const text = `${label} ${expenseText}`;
+    if ((exps.length && exps.every(isMahjongExpense)) || /mahjong|麻將|麻将/.test(text)) return 'mahjong';
+    if (stored === 'general') return 'general';
+    if (stored === 'mahjong') return 'mahjong';
+    const generalSignals = [
+      'utilities','utility','bill','bills','rent','subscription','subscriptions','grocery','groceries',
+      'household','internet','electricity','water','930 utilities'
+    ];
+    const travelSignals = [
+      'travel','trip','hotel','flight','airport','railway','train','metro','taxi','didi','grab',
+      'tour','attraction','guangzhou','baoche','booking','souvenir'
+    ];
+    const generalScore = generalSignals.reduce((n, word) => n + (text.includes(word) ? 1 : 0), 0);
+    const travelScore = travelSignals.reduce((n, word) => n + (text.includes(word) ? 1 : 0), 0);
+    if (stored === 'travel' && generalScore > travelScore) return 'general';
+    return stored;
+  }
+
   function normaliseRecord(g, kind='travel') {
-    const safeKind = normaliseKind(g?.kind || kind);
+    const safeKind = splitKindIdentity(g, kind);
     return {
       ...g,
       kind: safeKind,
@@ -3338,14 +3365,25 @@
   }
 
   function inferLegacyKind(g) {
-    if (g?.kind === 'mahjong' || g?.kind === 'general' || g?.kind === 'travel' || g?.kind === 'trip') return normaliseKind(g.kind);
-    const exps = Array.isArray(g?.expenses) ? g.expenses : [];
-    if (exps.length && exps.every(isMahjongExpense)) return 'mahjong';
-    const label = `${g?.name || ''} ${g?.emoji || ''}`.toLowerCase();
-    if (label.includes('mahjong') || label.includes('麻將') || label.includes('麻将')) return 'mahjong';
-    return 'travel';
+    return splitKindIdentity({ ...g, kind: g?.kind === 'trip' ? 'travel' : g?.kind }, 'travel');
   }
 
+  function repairAppDataKinds() {
+    const next = { travel: [], general: [], mahjong: [] };
+    const seen = new Set();
+    Object.keys(APP_CONFIG).forEach(bucket => {
+      (appData[bucket] || []).forEach(record => {
+        const key = record.remoteTripId || record.id;
+        if (!key || seen.has(key)) return;
+        const kind = splitKindIdentity(record, bucket);
+        const fixed = normaliseRecord({ ...record, kind }, kind);
+        next[kind].push(fixed);
+        seen.add(key);
+      });
+    });
+    appData = next;
+    groups = currentApp ? appData[currentApp] : [];
+  }
   function migrateLegacyStorage() {
     try {
       if (localStorage.getItem(STORAGE_KEYS.migration)) return;
@@ -3418,6 +3456,8 @@
       general: readStoredAppData('general'),
       mahjong: readStoredAppData('mahjong'),
     };
+    repairAppDataKinds();
+    saveAllAppData();
     groups = currentApp ? appData[currentApp] : [];
   }
   function saveProfile() {
@@ -3561,7 +3601,7 @@
   }
 
   function groupKind(g) {
-    return normaliseKind(g?.kind || currentApp || 'travel');
+    return splitKindIdentity(g, currentApp || 'travel');
   }
 
   function groupKindLabel(g) {
@@ -3570,7 +3610,7 @@
 
   function groupKindBadge(g) {
     const t = APP_CONFIG[groupKind(g)];
-    return `<span class="type-badge">${t.icon} ${esc(t.label)}</span>`;
+    return `<span class="type-badge">${t.emoji} ${esc(t.shortLabel)}</span>`;
   }
 
   function appConfig(kind=currentApp) {
@@ -3869,6 +3909,7 @@
       emoji: g.emoji || '',
       cover_photo: g.coverPhoto || null,
       base_currency: g.baseCurrency || DEFAULT_BASE_CURRENCY,
+      kind: groupKind(g),
       fx_rates: g.fxRates || {},
       created_by_device: profile.id,
       created_by_user: authSession?.user?.id || null,
@@ -3882,7 +3923,7 @@
       trip_id: g.remoteTripId || g.id,
       user_id: authSession?.user?.id,
       display_name: profile.name || authSession?.user?.email?.split('@')[0] || 'Member',
-      role: 'member',
+      role: isGroupOwner(g) ? 'owner' : 'member',
     };
   }
 
@@ -4019,6 +4060,22 @@
     if (!g?.remoteTripId) return true;
     const uid = authSession?.user?.id || null;
     return Boolean(uid && (g.joinedUserId === uid || g.creatorUserId === uid));
+  }
+
+  function authMemberForUser(g, userId=authSession?.user?.id) {
+    if (!userId) return null;
+    return (g?.authMembers || []).find(m => m.user_id === userId) || null;
+  }
+
+  function isGroupOwner(g) {
+    const uid = authSession?.user?.id || null;
+    return Boolean(uid && (g?.creatorUserId === uid || authMemberForUser(g, uid)?.role === 'owner'));
+  }
+
+  function canManageGroup(g) {
+    if (!g?.remoteTripId) return true;
+    const role = authMemberForUser(g)?.role;
+    return isGroupOwner(g) || role === 'manager';
   }
 
   function settlement(net) {
@@ -4166,6 +4223,7 @@
     profile.name = name;
     profile.email = email;
     saveProfile();
+    renameMyOnlineMember(oldName, name).catch(()=>{});
     if (isSignedIn() && oldName !== name) {
       authRequest('user', {
         method:'PUT',
@@ -4179,6 +4237,31 @@
     profileEditing = false;
     renderHome();
     renderProfile();
+  }
+
+  async function renameMyOnlineMember(oldName, newName) {
+    if (!onlineReady() || !isSignedIn() || !oldName || !newName || oldName === newName) return;
+    try {
+      await db('rpc/rename_my_trip_member', {
+        method: 'POST',
+        body: { p_old_name: oldName, p_new_name: newName },
+      });
+      Object.keys(APP_CONFIG).forEach(kind => {
+        (appData[kind] || []).forEach(g => {
+          if (g.iAm === oldName) g.iAm = newName;
+          g.members = (g.members || []).map(m => m === oldName ? newName : m);
+          (g.expenses || []).forEach(e => {
+            if (e.paidBy === oldName) e.paidBy = newName;
+            e.splitAmong = (e.splitAmong || []).map(m => m === oldName ? newName : m);
+          });
+          (g.payments || []).forEach(p => {
+            if (p.from === oldName) p.from = newName;
+            if (p.to === oldName) p.to = newName;
+          });
+        });
+      });
+      saveAllAppData();
+    } catch(e) {}
   }
 
   function shareProfile() {
@@ -4266,12 +4349,13 @@
 
   // ── HOME ──
   function authHTML() {
-    const cfg = appConfig();
+    const itemName = currentApp ? appConfig().itemName : 'split';
+    const itemPlural = currentApp ? appConfig().itemPlural : 'splits';
     if (!onlineReady()) {
       return `
         <div class="auth-card st-auth-card">
           <div class="auth-title">Online sync is offline.</div>
-          <div class="auth-sub">Add your Supabase URL and anon key to enable private shared ${esc(cfg.itemPlural)}.</div>
+          <div class="auth-sub">Add your Supabase URL and anon key to enable private shared ${esc(itemPlural)}.</div>
         </div>`;
     }
     if (isSignedIn()) {
@@ -4281,7 +4365,7 @@
       return `
         <div class="auth-card st-auth-card">
           <div class="auth-title">Money,<br>after the fact.</div>
-          <div class="auth-sub">Create an account to keep this ${esc(cfg.itemName)} private and synced with everyone involved.</div>
+          <div class="auth-sub">Create an account to keep this ${esc(itemName)} private and synced with everyone involved.</div>
           <div class="auth-grid">
             <input type="text" class="field" id="auth-name" placeholder="Display name" value="${esc(profile.name||'')}">
             <input type="email" class="field" id="auth-email" placeholder="Email">
@@ -4297,7 +4381,7 @@
     return `
       <div class="auth-card st-auth-card">
         <div class="auth-title">Money,<br>after the fact.</div>
-        <div class="auth-sub">Sign in to sync this ${esc(cfg.itemName)} privately.</div>
+        <div class="auth-sub">Sign in to sync your private ${esc(itemPlural)}.</div>
         <div class="auth-grid">
           <input type="text" class="field" id="auth-username" placeholder="Email">
           <input type="password" class="field" id="auth-signin-password" placeholder="Password">
@@ -4469,7 +4553,7 @@
     if (brand) brand.textContent = 'SplitMoney';
     const homeTitle = document.querySelector('#sh .st-section-head .display');
     if (homeTitle) homeTitle.textContent = 'Split Directory';
-    document.getElementById('directory-status-tabs')?.style.setProperty('display', 'flex');
+    document.getElementById('directory-status-tabs')?.style.setProperty('display', isSignedIn() ? 'flex' : 'none');
     document.getElementById('home-tab-active')?.classList.toggle('on', homeStatusFilter === 'active');
     document.getElementById('home-tab-past')?.classList.toggle('on', homeStatusFilter === 'past');
     document.getElementById('directory-balance-row')?.style.setProperty('display', 'none');
@@ -4511,7 +4595,10 @@
         list.appendChild(authWrap.firstElementChild);
         bindAuth();
       }
+      return;
     }
+    repairAppDataKinds();
+    saveAllAppData();
     renderDirectorySection(list, 'travel', 'Travel Splits', homeStatusFilter === 'past' ? 'No past travel splits yet.' : 'No active travel splits yet.');
     renderDirectorySection(list, 'mahjong', 'Mahjong Splits', homeStatusFilter === 'past' ? 'No past mahjong splits yet.' : 'No active mahjong splits yet.');
     renderDirectorySection(list, 'general', 'General Splits', homeStatusFilter === 'past' ? 'No past general splits yet.' : 'No active general splits yet.');
@@ -4552,6 +4639,7 @@
     const count = isMahjong ? mahjongExpenses(g).length : regularExpenses(g).length;
     const noun = isMahjong ? 'payouts' : 'expenses';
     const stateLabel = groupState(g) === 'past' ? ' archived' : '';
+    const identity = groupKindBadge(g);
     const row = document.createElement('div');
     row.className = 'group-card';
     row.innerHTML = `
@@ -4562,6 +4650,7 @@
       <div class="group-card-inner">
         <div class="group-info">
           <div class="group-name">${esc(g.name)}${stateLabel ? ` <span style="font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em;">${stateLabel.trim()}</span>` : ''}</div>
+          <div style="margin:6px 0 2px;">${identity}</div>
           <div class="group-meta">${(g.members||[]).length} ${isMahjong?'players':'members'} · ${count} ${noun} · ${groupUpdatedText(g)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
@@ -4596,6 +4685,10 @@
     currentApp = createKind;
     groups = appData[createKind] || [];
     const grp = editId ? groups.find(g=>g.id===editId) : null;
+    if (grp && !canManageGroup(grp)) {
+      alert('Only the group owner or a manager can change members and settings.');
+      return;
+    }
     if (grp) {
       cgState = {
         editId, kind:groupKind(grp), emoji:grp.emoji||'🌏',
@@ -4732,6 +4825,7 @@
       id,
       name, emoji:cgState.emoji,
       kind:normaliseKind(cgState.kind || currentApp || 'travel'),
+      splitKind:normaliseKind(cgState.kind || currentApp || 'travel'),
       members:cgState.members,
       baseCurrency:cgState.baseCcy,
       fxRates:{...cgState.fx},
@@ -4744,6 +4838,10 @@
     if (cgState.editId) {
       const idx=groups.findIndex(g=>g.id===cgState.editId);
       if (idx>=0) {
+        if (!canManageGroup(groups[idx])) {
+          alert('Only the group owner or a manager can save changes to this split.');
+          return;
+        }
         obj.expenses=groups[idx].expenses;
         obj.payments=groups[idx].payments||[];
         obj.createdAt=groups[idx].createdAt;
@@ -4752,6 +4850,8 @@
         obj.finalizedAt=groups[idx].finalizedAt;
         obj.creatorUserId=groups[idx].creatorUserId;
         obj.creatorName=groups[idx].creatorName;
+        obj.joinedUserId=groups[idx].joinedUserId;
+        obj.authMembers=groups[idx].authMembers||[];
         groups[idx]=obj;
         if (obj.remoteTripId) publishGroupOnline(obj,false).catch(()=>{});
       }
@@ -4773,6 +4873,10 @@
     groups = appData[targetKind] || [];
     const g=groups.find(x=>x.id===id);
     if (!g) return;
+    if (!canManageGroup(g)) {
+      alert('Only the group owner or a manager can archive or restore this split.');
+      return;
+    }
     if (groupKind(g) !== targetKind) return;
     if (!canSeeOnlineGroup(g)) {
       alert('This online split is private. Sign in with the account that joined through the invite link to view it.');
@@ -4820,6 +4924,11 @@
     document.getElementById('g-title').textContent=g.name;
     const addQuick = document.getElementById('g-add-quick');
     if (addQuick) addQuick.textContent = cfg.addLabel;
+    const editBtn = document.getElementById('g-edit');
+    if (editBtn) {
+      editBtn.style.display = canManageGroup(g) ? '' : 'none';
+      editBtn.title = canManageGroup(g) ? 'Members and settings' : 'Only the owner or managers can edit this split';
+    }
 
     // bubbles
     const bb=document.getElementById('g-bubbles');
@@ -5636,6 +5745,8 @@
     const cfg = appConfig();
     const archived = groupState(g) === 'past';
     const archiveLabel = archived ? 'Restore to Active' : 'Archive Split';
+    const canManage = canManageGroup(g);
+    const owner = !g.remoteTripId || isGroupOwner(g);
     const online = g.remoteTripId
       ? `<div class="hint" style="margin-bottom:10px;">Online ${esc(cfg.itemName)} ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
       : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online ${esc(cfg.itemName)}</button>`;
@@ -5650,16 +5761,36 @@
         ${online}
         <div class="share-btn-row">
           ${shareButtons}
+          ${canManage ? `<button class="btn btn-ghost btn-sm js-archive-group" style="font-size:13px;">${archiveLabel}</button>` : ''}
         </div>
-        <button class="btn btn-ghost btn-sm js-archive-group" style="font-size:13px;">${archiveLabel}</button>
-        <button class="btn btn-danger btn-sm js-del-group" style="font-size:13px;">🗑️ Delete Group</button>
+        ${owner ? managerControlsHTML(g) : `<div class="hint" style="margin-top:10px;">Only the owner or appointed managers can change this split. Only the owner can delete it.</div>`}
+        ${owner ? `<button class="btn btn-danger btn-sm js-del-group" style="font-size:13px;margin-top:10px;">Delete Group</button>` : ``}
       </div>`;
+  }
+
+  function managerControlsHTML(g) {
+    const rows = (g.authMembers || []).map(m => {
+      const isOwner = m.role === 'owner' || m.user_id === g.creatorUserId;
+      const label = isOwner ? 'Owner' : (m.role === 'manager' ? 'Manager' : 'Member');
+      return `
+        <div class="manager-row">
+          <div>
+            <div class="manager-name">${esc(m.display_name || 'Member')}</div>
+            <div class="manager-role">${esc(label)}</div>
+          </div>
+          ${isOwner ? '' : `<button class="btn btn-ghost btn-sm js-role-toggle" data-user-id="${esc(m.user_id)}" data-next-role="${m.role === 'manager' ? 'member' : 'manager'}">${m.role === 'manager' ? 'Remove manager' : 'Make manager'}</button>`}
+        </div>`;
+    }).join('');
+    return rows ? `<div class="manager-list">${rows}</div>` : '';
   }
 
   function bindShare(g) {
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
     document.querySelector('.js-archive-group')?.addEventListener('click', ()=>setGroupArchived(g, groupState(g) !== 'past'));
+    document.querySelectorAll('.js-role-toggle').forEach(btn=>{
+      btn.addEventListener('click', ()=>setMemberRole(g, btn.dataset.userId, btn.dataset.nextRole));
+    });
     document.querySelector('.js-del-group')?.addEventListener('click', async ()=>{
       if (g.remoteTripId) {
         if (!isSignedIn()) {
@@ -5717,6 +5848,26 @@
     }
   }
 
+  async function setMemberRole(g, userId, role) {
+    if (!g?.remoteTripId || !userId || !['manager','member'].includes(role)) return;
+    if (!isGroupOwner(g)) {
+      alert('Only the group owner can change manager permissions.');
+      return;
+    }
+    try {
+      await db('rpc/set_trip_member_role', {
+        method: 'POST',
+        body: { p_trip_id: g.remoteTripId, p_user_id: userId, p_role: role },
+      });
+      const member = (g.authMembers || []).find(m => m.user_id === userId);
+      if (member) member.role = role;
+      saveAllAppData();
+      renderGroup(g);
+    } catch(err) {
+      alert(`Could not update permissions:\n${err.message}`);
+    }
+  }
+
   async function publishGroupOnline(g, showAlert=true) {
     if (!onlineReady()) {
       alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
@@ -5725,11 +5876,16 @@
     if (!requireSignIn()) return;
     try {
       const wasOnline = Boolean(g.remoteTripId);
+      if (wasOnline && !canManageGroup(g)) {
+        alert('Only the group owner or a manager can update this split.');
+        return;
+      }
       const row = remoteTripRow(g);
       g.remoteTripId = row.id;
       g.remoteShareCode = row.share_code;
       g.joinedUserId = authSession.user.id;
       g.creatorUserId = g.creatorUserId || authSession.user.id;
+      g.authMembers = g.authMembers || [{ user_id: authSession.user.id, display_name: profile.name || 'Owner', role: 'owner' }];
 
       if (!wasOnline) {
         const created = await db('rpc/create_trip_with_membership', {
@@ -5757,6 +5913,7 @@
             body: { cover_photo: row.cover_photo, updated_at: row.updated_at },
           });
         }
+        patchTripKindOnline(g);
       } else {
         await db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}`, {
           method:'PATCH',
@@ -5765,12 +5922,14 @@
             name: row.name,
             emoji: row.emoji,
             cover_photo: row.cover_photo,
+            kind: row.kind,
             base_currency: row.base_currency,
             fx_rates: row.fx_rates,
             updated_at: row.updated_at,
             finalized_at: row.finalized_at,
           },
         });
+        patchTripKindOnline(g);
       }
 
       const members = remoteMemberRows(g);
@@ -5830,6 +5989,7 @@
       if (!trip) throw new Error('Online record was not found.');
 
       const members = await db(`members?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
+      const authMembers = await db(`trip_members?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
       const expenses = await db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
       const payments = await db(`payments?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&select=*&order=created_at.asc`);
 
@@ -5841,6 +6001,7 @@
       g.remoteShareCode = trip.share_code || g.remoteShareCode;
       g.creatorUserId = g.creatorUserId || trip.created_by_user || null;
       g.finalizedAt = trip.finalized_at || undefined;
+      g.authMembers = authMembers || [];
 
       const names = new Set(g.members||[]);
       (members||[]).forEach(m=>{ if (m.name && !names.has(m.name)) { names.add(m.name); g.members.push(m.name); } });
@@ -5852,7 +6013,7 @@
       const paymentsById = new Map((g.payments||[]).map(p=>[p.id,p]));
       (payments||[]).forEach(r=>paymentsById.set(r.id, paymentFromRemote(r)));
       g.payments = [...paymentsById.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
-      g.kind = trip.kind ? normaliseKind(trip.kind) : (g.kind ? normaliseKind(g.kind) : inferLegacyKind({ ...g, kind: null }));
+      g.kind = splitKindIdentity({ ...g, kind: trip.kind || g.kind || null }, g.kind || currentApp || 'travel');
 
       save();
       if (gid === g.id) renderGroup(g);
@@ -5860,6 +6021,36 @@
     } catch(err) {
       if (!silent) alert(`Online sync failed:\n${err.message}`);
     }
+  }
+
+  async function chooseJoinMemberName(code) {
+    let options = [];
+    try {
+      const rows = await db('rpc/preview_trip_join_options', {
+        method: 'POST',
+        body: { p_share_code: code },
+      });
+      options = (rows || []).map(r => r.name).filter(Boolean);
+    } catch(e) {}
+    if (!options.length) {
+      const fallback = profile.name || authSession?.user?.email?.split('@')[0] || 'Member';
+      return (prompt('Who are you in this split?', fallback) || '').trim();
+    }
+    const message = [
+      'Who are you in this split?',
+      '',
+      ...options.map((name, idx) => `${idx + 1}. ${name}`),
+      '',
+      'Enter the number or exact name. Your account will be linked to that member.'
+    ].join('\n');
+    const answer = (prompt(message, '1') || '').trim();
+    if (!answer) return '';
+    const picked = /^\d+$/.test(answer) ? options[Number(answer) - 1] : options.find(n => n.toLowerCase() === answer.toLowerCase());
+    if (!picked) {
+      alert('Please pick one of the member names added by the owner.');
+      return '';
+    }
+    return picked;
   }
 
   async function joinOnlineTrip(codeOverride=null) {
@@ -5871,9 +6062,11 @@
     const code = (codeOverride || prompt('Enter the online code:', pendingJoinCode || urlTripCode()) || '').trim().toUpperCase();
     if (!code) return;
     try {
+      const joinName = await chooseJoinMemberName(code);
+      if (!joinName) return;
       const tripRows = await db('rpc/join_trip_by_code', {
         method:'POST',
-        body:{ p_share_code:code, p_display_name:profile.name || authSession.user.email?.split('@')[0] || 'Member' },
+        body:{ p_share_code:code, p_display_name:joinName },
       });
       const trip = tripRows?.[0];
       if (!trip) throw new Error('No online record found for that code.');
@@ -5893,10 +6086,11 @@
           members: [],
           baseCurrency: trip.base_currency || DEFAULT_BASE_CURRENCY,
           fxRates: { ...DEFAULT_FX_RATES, ...(trip.fx_rates || {}) },
-          iAm: profile.name || null,
+          iAm: joinName,
           expenses: [],
           payments: [],
           createdAt: trip.created_at || new Date().toISOString(),
+          authMembers: [],
         };
         const targetKind = groupKind(g);
         appData[targetKind] = appData[targetKind] || [];
@@ -5905,6 +6099,9 @@
       }
       await syncGroupOnline(g,true);
       g.joinedUserId = authSession.user.id;
+      g.iAm = joinName;
+      profile.name = joinName;
+      saveProfile();
       pendingJoinCode = null;
       saveAllAppData();
       openGroup(g.id, groupKind(g));
@@ -5941,13 +6138,17 @@
         createdAt: trip.created_at || new Date().toISOString(),
         creatorUserId: trip.created_by_user || null,
         finalizedAt: trip.finalized_at || undefined,
+        authMembers: [],
       }));
       await Promise.all(loaded.map(g=>syncGroupOnline(g,true)));
       Object.keys(APP_CONFIG).forEach(kind => {
         const localOnly = (appData[kind] || []).filter(g => !g.remoteTripId);
-        const onlineForKind = loaded.filter(g => groupKind(g) === kind);
+        const onlineForKind = loaded
+          .map(g => normaliseRecord({ ...g, kind: splitKindIdentity(g, knownRemoteKinds.get(g.remoteTripId) || g.kind || kind) }, kind))
+          .filter(g => groupKind(g) === kind);
         appData[kind] = [...localOnly, ...onlineForKind];
       });
+      repairAppDataKinds();
       groups = currentApp ? appData[currentApp] : [];
       saveAllAppData();
     } catch(err) {
@@ -5984,6 +6185,15 @@
       method:'PATCH',
       prefer:'return=minimal',
       body: { archived_at: archivedAt || null },
+    }).catch(()=>{});
+  }
+
+  function patchTripKindOnline(g) {
+    if (!onlineReady() || !g?.remoteTripId || !isSignedIn()) return;
+    db(`trips?id=eq.${encodeURIComponent(g.remoteTripId)}`, {
+      method:'PATCH',
+      prefer:'return=minimal',
+      body: { kind: groupKind(g), updated_at: new Date().toISOString() },
     }).catch(()=>{});
   }
 
@@ -6836,7 +7046,7 @@
     document.querySelectorAll('[data-create-kind]').forEach(btn=>{
       btn.addEventListener('click', ()=>openCreate(null, btn.dataset.createKind));
     });
-    document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+    document.getElementById('theme-toggle-btn')?.addEventListener('click', toggleTheme);
     document.getElementById('settings-btn').addEventListener('click', openSettings);
     document.getElementById('settings-close').addEventListener('click', closeSettings);
     document.getElementById('settings-panel').addEventListener('click', e=>{
@@ -6949,3 +7159,7 @@
 </script>
 </body>
 </html>
+
+
+
+
