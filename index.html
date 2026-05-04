@@ -3294,6 +3294,7 @@
       fxRates: { ...DEFAULT_FX_RATES, ...(g.fxRates || {}) },
       expenses: Array.isArray(g.expenses) ? g.expenses : [],
       payments: Array.isArray(g.payments) ? g.payments : [],
+      joinedUserId: g.joinedUserId || null,
     };
   }
 
@@ -3363,6 +3364,11 @@
     if (!currentApp || !APP_CONFIG[currentApp]) return;
     appData[currentApp] = groups;
     try { localStorage.setItem(STORAGE_KEYS[currentApp], JSON.stringify(groups)); } catch(e){}
+  }
+  function saveAllAppData() {
+    Object.keys(APP_CONFIG).forEach(kind => {
+      try { localStorage.setItem(STORAGE_KEYS[kind], JSON.stringify(appData[kind] || [])); } catch(e){}
+    });
   }
   function load() {
     migrateLegacyStorage();
@@ -3956,8 +3962,17 @@
   function requireSignIn() {
     if (isSignedIn()) return true;
     const cfg = appConfig();
-    alert(`Please sign in first. Online ${cfg.itemPlural} are private to signed-in members.`);
+    authMode = 'signin';
+    renderHome();
+    show('home');
+    alert(`Please sign in or create an account first. Online ${cfg.itemPlural} are private and only visible after you join through the invite link.`);
     return false;
+  }
+
+  function canSeeOnlineGroup(g) {
+    if (!g?.remoteTripId) return true;
+    const uid = authSession?.user?.id || null;
+    return Boolean(uid && (g.joinedUserId === uid || g.creatorUserId === uid));
   }
 
   function settlement(net) {
@@ -4456,18 +4471,19 @@
     const btns = document.createElement('div');
     btns.className = 'home-tools';
     btns.innerHTML = `
-      <button class="btn btn-ghost btn-sm" id="h-export">Export backup</button>
-      <button class="btn btn-ghost btn-sm" id="h-import">Import</button>
+      <button class="btn btn-ghost btn-sm" id="h-refresh-online">Refresh online splits</button>
       <input type="file" id="h-import-file" accept="application/json" style="display:none;">`;
     list.appendChild(btns);
-    document.getElementById('h-export')?.addEventListener('click', exportAll);
-    document.getElementById('h-import')?.addEventListener('click', ()=>document.getElementById('h-import-file').click());
-    document.getElementById('h-import-file')?.addEventListener('change', importAll);
+    document.getElementById('h-refresh-online')?.addEventListener('click', async ()=>{
+      if (!requireSignIn()) return;
+      await loadMyOnlineTrips(false);
+      renderHome();
+    });
   }
 
   function renderDirectorySection(list, kind, title, emptyText) {
     const cfg = appConfig(kind);
-    const items = (appData[kind] || []).filter(g => groupKind(g) === kind);
+    const items = (appData[kind] || []).filter(g => groupKind(g) === kind && canSeeOnlineGroup(g));
     const section = document.createElement('section');
     section.className = 'directory-section';
     section.innerHTML = `<div class="day-hdr">${esc(title)}</div>`;
@@ -4692,6 +4708,7 @@
       }
     } else {
       obj.creatorUserId = authSession?.user?.id || null;
+      obj.joinedUserId = authSession?.user?.id || null;
       obj.creatorName = profile.name || null;
       groups.push(obj);
     }
@@ -4708,6 +4725,11 @@
     const g=groups.find(x=>x.id===id);
     if (!g) return;
     if (groupKind(g) !== targetKind) return;
+    if (!canSeeOnlineGroup(g)) {
+      alert('This online split is private. Sign in with the account that joined through the invite link to view it.');
+      backToDirectory();
+      return;
+    }
     gid=id;
     renderGroup(g);
     if (g.remoteShareCode) setTripUrl(g.remoteShareCode);
@@ -5566,10 +5588,9 @@
     const online = g.remoteTripId
       ? `<div class="hint" style="margin-bottom:10px;">Online ${esc(cfg.itemName)} ${g.remoteShareCode?`code: <strong>${g.remoteShareCode}</strong>`:'is active'}. Changes auto-sync in the background.</div>`
       : `<button class="btn btn-green btn-sm js-online-publish" style="font-size:13px;margin-bottom:10px;">Create Online ${esc(cfg.itemName)}</button>`;
-    const shareButtons = g.remoteTripId
+      const shareButtons = g.remoteTripId
       ? `<button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">Share Join Code</button>`
-      : `<button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">Share Backup Code</button>
-         <button class="btn btn-ghost btn-sm js-import" style="flex:1;font-size:13px;">Import Backup</button>`;
+      : `<button class="btn btn-ghost btn-sm js-share" style="flex:1;font-size:13px;">Create Online Link</button>`;
     return `
       <div class="share-sec">
         <div class="hint">
@@ -5586,7 +5607,6 @@
   function bindShare(g) {
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
     document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
-    document.querySelector('.js-import')?.addEventListener('click', ()=>doImport(g.id));
     document.querySelector('.js-del-group')?.addEventListener('click', async ()=>{
       if (g.remoteTripId) {
         if (!isSignedIn()) {
@@ -5623,6 +5643,8 @@
       const row = remoteTripRow(g);
       g.remoteTripId = row.id;
       g.remoteShareCode = row.share_code;
+      g.joinedUserId = authSession.user.id;
+      g.creatorUserId = g.creatorUserId || authSession.user.id;
 
       if (!wasOnline) {
         const created = await db('rpc/create_trip_with_membership', {
@@ -5776,6 +5798,9 @@
           id: uid(),
           remoteTripId: trip.id,
           remoteShareCode: trip.share_code,
+          joinedUserId: authSession.user.id,
+          creatorUserId: trip.created_by_user || null,
+          kind: normaliseKind(trip.kind || currentApp || 'travel'),
           name: trip.name,
           emoji: trip.emoji || '🌏',
           coverPhoto: trip.cover_photo || null,
@@ -5787,12 +5812,16 @@
           payments: [],
           createdAt: trip.created_at || new Date().toISOString(),
         };
+        const targetKind = groupKind(g);
+        appData[targetKind] = appData[targetKind] || [];
+        groups = appData[targetKind];
         groups.push(g);
       }
       await syncGroupOnline(g,true);
+      g.joinedUserId = authSession.user.id;
       pendingJoinCode = null;
-      save();
-      openGroup(g.id);
+      saveAllAppData();
+      openGroup(g.id, groupKind(g));
     } catch(err) {
       alert(`Join failed:\n${err.message}`);
     }
@@ -5802,13 +5831,15 @@
     if (!onlineReady() || !isSignedIn()) return;
     try {
       const tripRows = await db('trips?select=*&order=updated_at.desc');
-      groups = (tripRows||[]).map(trip => ({
+      const loaded = (tripRows||[]).map(trip => ({
         id: trip.id,
         remoteTripId: trip.id,
         remoteShareCode: trip.share_code,
+        joinedUserId: authSession.user.id,
         name: trip.name,
         emoji: trip.emoji || '🌏',
         coverPhoto: trip.cover_photo || null,
+        kind: normaliseKind(trip.kind || 'travel'),
         members: [],
         baseCurrency: trip.base_currency || DEFAULT_BASE_CURRENCY,
         fxRates: { ...DEFAULT_FX_RATES, ...(trip.fx_rates || {}) },
@@ -5819,8 +5850,14 @@
         creatorUserId: trip.created_by_user || null,
         finalizedAt: trip.finalized_at || undefined,
       }));
-      await Promise.all(groups.map(g=>syncGroupOnline(g,true)));
-      save();
+      await Promise.all(loaded.map(g=>syncGroupOnline(g,true)));
+      Object.keys(APP_CONFIG).forEach(kind => {
+        const localOnly = (appData[kind] || []).filter(g => !g.remoteTripId);
+        const onlineForKind = loaded.filter(g => groupKind(g) === kind);
+        appData[kind] = [...localOnly, ...onlineForKind];
+      });
+      groups = currentApp ? appData[currentApp] : [];
+      saveAllAppData();
     } catch(err) {
       if (!silent) alert(`Could not load your online records:\n${err.message}`);
     }
@@ -6615,14 +6652,11 @@
       }
       return;
     }
-    const code=btoa(unescape(encodeURIComponent(JSON.stringify({st:true,g}))));
-    if (navigator.share) {
-      navigator.share({title:g.name,text:`SplitMoney local backup for "${g.name}":\n\n${code}`}).catch(()=>{});
-    } else {
-      navigator.clipboard?.writeText(code)
-        .then(()=>alert('Backup code copied. This is only for local/offline backup transfer. Online records use owner-approved join codes.'))
-        .catch(()=>prompt('Copy this local backup code:',code));
+    if (!isSignedIn()) {
+      requireSignIn();
+      return;
     }
+    publishGroupOnline(g);
   }
 
   function doImport(targetId) {
@@ -6805,6 +6839,12 @@
   bind();
   renderHome();
   show('home');
+  if (onlineReady() && isSignedIn()) {
+    loadMyOnlineTrips(true).then(async ()=>{
+      if (pendingJoinCode) await joinOnlineTrip(pendingJoinCode);
+      else renderHome();
+    });
+  }
 })();
 </script>
 </body>
