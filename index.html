@@ -2705,20 +2705,38 @@
       color: var(--accent-ink);
       opacity: .72;
     }
-    /* Remove the desktop phone-frame shadow that darkened as the page scrolled. */
+    /* Flat app canvas: prevents old hero/frame gradients from darkening during page scroll. */
+    html,
     body {
       background: var(--bg) !important;
+      background-image: none !important;
     }
     .screen {
       border: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
-      background: transparent !important;
+      background: var(--bg) !important;
     }
+    .st-home-shell,
+    .st-group-shell,
     .st-content,
     .st-home-main,
-    .st-group-main {
+    .st-group-main,
+    .scroll,
+    .st-trip-scroll,
+    .st-group-scroll,
+    .tab-pane {
       background: var(--bg) !important;
+      background-image: none !important;
+    }
+    .st-desktop-rail {
+      background: var(--surface) !important;
+      background-image: none !important;
+    }
+    .group-hero::after,
+    .home-hero::before,
+    .home-hero::after {
+      display: none !important;
     }
   </style>
 </head>
@@ -3238,6 +3256,7 @@
   let authSession = null;
   let syncTimer = null;
   let settleViewMode = 'min';
+  let copyBillCurrency = '';
   let pendingJoinCode = null;
   let authMode = 'signin';
   let appPrefs = { theme:'light', font:'splittrip', contrast:'high', density:'comfortable', accent:'lime', baseCurrency:DEFAULT_BASE_CURRENCY };
@@ -3652,6 +3671,11 @@
 
   function displayFmt(cnyFen, g) {
     return fmt(displayMinor(cnyFen, g), displayCurrency(g));
+  }
+
+  function moneyFmtInCurrency(cnyFen, g, ccy) {
+    const target = CCYS.includes(ccy) ? ccy : displayCurrency(g);
+    return fmt(fromCny(cnyFen || 0, target, { ...DEFAULT_FX_RATES, ...(g?.fxRates || {}) }), target);
   }
 
   function signedDisplayMoney(cnyFen, g) {
@@ -5965,16 +5989,18 @@
     shell.appendChild(section);
   }
 
-  function settlementWhatsAppMessage(g,mode='min') {
+  function settlementWhatsAppMessage(g,mode='min',copyCcy=displayCurrency(g)) {
     const net = balances(g);
     const safeMode = mode === 'activity' ? 'activity' : 'min';
+    const ccy = CCYS.includes(copyCcy) ? copyCcy : displayCurrency(g);
     const txs = safeMode === 'activity' ? activitySettlement(g) : settlement(net);
     const exps = activeExpenses(g);
     const total = groupTotalSpent(g);
     const lines = [
       `${appConfig().label} settlement - ${g.name}`,
       '',
-      `Total spent: ${displayFmt(total,g)}`,
+      `Currency: ${ccy}`,
+      `Total spent: ${moneyFmtInCurrency(total,g,ccy)}`,
       `Active entries: ${exps.length}`,
       `Members: ${(g.members||[]).join(', ') || 'No members'}`,
       '',
@@ -5985,7 +6011,7 @@
     if (balanceRows.length) {
       balanceRows.forEach(([name,amount]) => {
         const label = amount > 0 ? 'gets back' : amount < 0 ? 'owes' : 'is settled';
-        lines.push(`- ${name} ${label} ${amount ? displayFmt(Math.abs(amount),g) : ''}`.trim());
+        lines.push(`- ${name} ${label} ${amount ? moneyFmtInCurrency(Math.abs(amount),g,ccy) : ''}`.trim());
       });
     } else {
       lines.push('- No balances yet');
@@ -5994,7 +6020,7 @@
     lines.push('', safeMode === 'activity' ? 'Settle up by activity:' : 'Settle up with minimized transfers:');
     if (txs.length) {
       txs.forEach((tx,i) => {
-        lines.push(`${i+1}. ${tx.from} pays ${tx.to}: ${displayFmt(tx.amt,g)}`);
+        lines.push(`${i+1}. ${tx.from} pays ${tx.to}: ${moneyFmtInCurrency(tx.amt,g,ccy)}`);
       });
     } else {
       lines.push('Everyone is settled. No payments needed.');
@@ -6004,8 +6030,8 @@
     return lines.join('\n');
   }
 
-  function copySettleBill(g,mode='min') {
-    const text = settlementWhatsAppMessage(g,mode);
+  function copySettleBill(g,mode='min',copyCcy=displayCurrency(g)) {
+    const text = settlementWhatsAppMessage(g,mode,copyCcy);
     navigator.clipboard?.writeText(text)
       .then(()=>alert('Bill copied.'))
       .catch(()=>prompt('Copy this bill:', text));
@@ -6018,6 +6044,10 @@
     const txs=mode === 'activity' ? activitySettlement(g) : settlement(net);
     const has=activeExpenses(g).length>0;
     const transferLabel = `${txs.length} transfer${txs.length===1?'':'s'}`;
+    const selectedCopyCcy = CCYS.includes(copyBillCurrency) ? copyBillCurrency : displayCurrency(g);
+    const copyCurrencyOptions = CCYS.map(ccy => `
+      <option value="${ccy}" ${ccy === selectedCopyCcy ? 'selected' : ''}>Copy in ${ccy} (${SYM[ccy] || ccy})</option>
+    `).join('');
     const heroLabel = mode === 'activity' ? 'Activity-based payments' : 'Minimum payments';
     const heroSub = mode === 'activity'
       ? `Shows each direct person-to-person balance from the ${esc(appConfig().itemName)} activity, with all shared entries and previous payments summed by pair.`
@@ -6042,10 +6072,20 @@
           </button>
         </div>
         <div class="settle-share-row">
+          <select class="settle-select" id="settle-copy-currency" aria-label="Copy bill currency">
+            ${copyCurrencyOptions}
+          </select>
           <button class="btn btn-green btn-sm" id="settle-whatsapp-share" type="button">Copy bill</button>
         </div>
       </section>`;
-    shell.querySelector('#settle-whatsapp-share')?.addEventListener('click', ()=>copySettleBill(g,mode));
+    shell.querySelector('#settle-copy-currency')?.addEventListener('change', e => {
+      copyBillCurrency = e.target.value;
+    });
+    shell.querySelector('#settle-whatsapp-share')?.addEventListener('click', ()=>{
+      const copyCcy = shell.querySelector('#settle-copy-currency')?.value || selectedCopyCcy;
+      copyBillCurrency = copyCcy;
+      copySettleBill(g,mode,copyCcy);
+    });
     shell.querySelectorAll('[data-settle-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         settleViewMode = btn.dataset.settleMode === 'activity' ? 'activity' : 'min';
