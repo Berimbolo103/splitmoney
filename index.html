@@ -2375,6 +2375,80 @@
       .profile-actions .btn { flex: 1 1 130px; }
     }
 
+    /* Page-level scrolling: headers and hero sections scroll away with content. */
+    html, body {
+      height: auto;
+      min-height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    body {
+      min-height: 100vh;
+      user-select: auto;
+      -webkit-user-select: auto;
+    }
+    .screen {
+      position: relative;
+      inset: auto;
+      left: auto;
+      right: auto;
+      top: auto;
+      bottom: auto;
+      transform: none;
+      min-height: 100vh;
+      height: auto;
+      margin: 0 auto;
+      overflow: visible;
+    }
+    .screen.hidden { display: none; }
+    .scroll,
+    .wiz-body,
+    .st-trip-scroll,
+    .st-group-scroll {
+      flex: none;
+      height: auto;
+      min-height: 0;
+      overflow: visible;
+      -webkit-overflow-scrolling: auto;
+    }
+    .st-home-shell,
+    .st-group-shell,
+    .st-content,
+    .st-home-main,
+    .st-group-main {
+      height: auto;
+      min-height: 100vh;
+      overflow: visible;
+    }
+    .hdr,
+    .wiz-hdr,
+    .st-topbar,
+    .group-screen-header,
+    .group-hero,
+    .home-hero,
+    .st-section-head,
+    .tab-bar,
+    .quick-actions {
+      position: static;
+      top: auto;
+    }
+    .fab {
+      position: fixed;
+    }
+    @media (max-width: 899px) {
+      .screen {
+        min-height: 100vh;
+        height: auto;
+        overflow: visible;
+      }
+      .st-home-shell,
+      .st-group-shell,
+      .st-content {
+        height: auto;
+        min-height: 100vh;
+      }
+    }
+
     /* split type + mahjong */
     .split-choice-body, .mj-body {
       padding: 16px;
@@ -2568,6 +2642,44 @@
       color: var(--muted);
       margin-top: 2px;
     }
+    .mj-wizard-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .mj-wizard-title {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -.03em;
+    }
+    .mj-step-pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .mj-review-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .mj-review-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .mj-review-row:last-child { border-bottom: 0; }
+    .mj-review-row strong { color: var(--text); }
   </style>
 </head>
 <body>
@@ -3094,6 +3206,14 @@
   let wiz = { step:1, data:{} };
   let mjLosers = new Set();
   let mjWinners = new Set();
+  let mjWizard = {
+    open:false,
+    step:0,
+    potCount:1,
+    includeMeal:false,
+    pots:[],
+    meal:{ payer:'', amountStr:'', split:[] },
+  };
 
   let cgState = {
     editId: null, kind:'travel', emoji:'🌏', members:[],
@@ -3365,6 +3485,9 @@
 
   function mahjongExpenses(g) {
     return activeExpenses(g).filter(isMahjongExpense);
+  }
+  function mahjongBillEntries(g) {
+    return activeExpenses(g).filter(e => isMahjongExpense(e) || e?.source === 'meal');
   }
 
   function regularExpenses(g) {
@@ -4648,7 +4771,7 @@
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
     document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('on',p.id===`tp-${name}`));
     const addBtn = document.getElementById('add-exp-btn');
-    if (addBtn) addBtn.style.display = 'none';
+    if (addBtn) addBtn.style.display = currentApp === 'mahjong' && name === 'mahjong' ? 'flex' : 'none';
   }
 
   function openPrimaryAdd() {
@@ -4656,7 +4779,7 @@
     if (!g) return;
     if (currentApp === 'mahjong') {
       setTab('mahjong');
-      document.getElementById('mj-single-amt')?.focus();
+      startMahjongWizard(g);
       return;
     }
     openWizard();
@@ -4820,7 +4943,7 @@
   function renderMahjongHistory(g) {
     const c = document.getElementById('tp-expenses');
     if (!c) return;
-    const entries = mahjongExpenses(g).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+    const entries = mahjongBillEntries(g).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
     if (!entries.length) {
       c.innerHTML = `
         <div class="empty" style="padding:48px 24px;">
@@ -4830,14 +4953,17 @@
       return;
     }
     c.innerHTML = entries.map(e => {
-      const from = e.splitAmong?.[0] || '';
+      const from = isMahjongExpense(e) ? (e.splitAmong?.[0] || '') : (e.splitAmong || []).join(', ');
       const to = e.paidBy || '';
+      const meta = isMahjongExpense(e)
+        ? `<strong>${esc(from)}</strong> pays <strong>${esc(to)}</strong> · ${fmtDate(e.date || today())}`
+        : `<strong>${esc(to)}</strong> paid meal · split by ${esc(from || 'no one')} · ${fmtDate(e.date || today())}`;
       return `
         <div class="exp-row">
-          <div class="exp-icon">🀄</div>
+          <div class="exp-icon">${isMahjongExpense(e)?'🀄':'🍽️'}</div>
           <div class="exp-info">
-            <div class="exp-title">${esc(e.description || 'Mahjong payout')}</div>
-            <div class="exp-meta"><strong>${esc(from)}</strong> pays <strong>${esc(to)}</strong> · ${fmtDate(e.date || today())}</div>
+            <div class="exp-title">${esc(e.description || (isMahjongExpense(e) ? 'Mahjong payout' : 'Meal money'))}</div>
+            <div class="exp-meta">${meta}</div>
           </div>
           <div class="exp-right">
             <div class="exp-amount"><div class="exp-total">${displayFmt(e.cnyFen || 0,g)}</div></div>
@@ -4849,7 +4975,7 @@
       btn.addEventListener('click', ()=>{
         const exp = g.expenses.find(e=>e.id===btn.dataset.id);
         if (!exp) return;
-        if (!confirm(`Delete "${exp.description || 'Mahjong payout'}"?`)) return;
+        if (!confirm(`Delete "${exp.description || 'Mahjong entry'}"?`)) return;
         g.expenses = g.expenses.filter(e=>e.id!==exp.id);
         deleteExpenseOnline(g, exp.id);
         save();
@@ -4906,6 +5032,255 @@
     ));
   }
 
+  function defaultMahjongPot(members) {
+    return {
+      winner: members[0] || '',
+      winnerAmountStr: '',
+      loser: members.find(n=>n !== members[0]) || members[0] || '',
+      loserAmountStr: '',
+    };
+  }
+
+  function startMahjongWizard(g) {
+    const members = [...(g.members || [])].sort();
+    if (members.length < 2) {
+      alert('Add at least two players before recording Mahjong pots.');
+      return;
+    }
+    mjWizard = {
+      open:true,
+      step:0,
+      potCount:1,
+      includeMeal:false,
+      pots:[defaultMahjongPot(members)],
+      meal:{ payer:members[0] || '', amountStr:'', split:[...members] },
+    };
+    renderMahjong(g);
+  }
+
+  function closeMahjongWizard(g) {
+    mjWizard.open = false;
+    renderMahjong(g);
+  }
+
+  function syncMahjongWizardPots(g) {
+    const members = [...(g.members || [])].sort();
+    const count = Math.max(1, Math.min(20, parseInt(mjWizard.potCount,10) || 1));
+    mjWizard.potCount = count;
+    while (mjWizard.pots.length < count) mjWizard.pots.push(defaultMahjongPot(members));
+    mjWizard.pots = mjWizard.pots.slice(0,count);
+  }
+
+  function mahjongWizardFinalStep() {
+    return mjWizard.potCount + (mjWizard.includeMeal ? 1 : 0) + 1;
+  }
+
+  function mahjongWizardReview(g) {
+    const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
+    const potRows = mjWizard.pots.map((pot,i) => {
+      const amount = parseAmt(pot.winnerAmountStr || pot.loserAmountStr || '');
+      return `
+        <div class="mj-review-row">
+          <span>Pot ${i+1}: <strong>${esc(pot.loser)}</strong> pays <strong>${esc(pot.winner)}</strong></span>
+          <strong class="num">${fmt(amount,ccy)}</strong>
+        </div>`;
+    }).join('');
+    const mealAmount = parseAmt(mjWizard.meal.amountStr || '');
+    const mealRow = mjWizard.includeMeal ? `
+      <div class="mj-review-row">
+        <span>Meal: <strong>${esc(mjWizard.meal.payer)}</strong> paid, split by ${mjWizard.meal.split.length} people</span>
+        <strong class="num">${fmt(mealAmount,ccy)}</strong>
+      </div>` : '';
+    return `${potRows}${mealRow}`;
+  }
+
+  function renderMahjongWizard(g) {
+    const c = document.getElementById('tp-mahjong');
+    const members = [...(g.members || [])].sort();
+    const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
+    const finalStep = mahjongWizardFinalStep();
+    const step = Math.min(mjWizard.step, finalStep);
+    mjWizard.step = step;
+    const options = members.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    const title = step === 0
+      ? 'How many pots?'
+      : step <= mjWizard.potCount
+        ? `Pot ${step}`
+        : step === finalStep
+          ? 'Review Mahjong bill'
+          : 'Add meal money';
+    const sub = step === 0
+      ? 'Tell me how many rounds/pots to record.'
+      : step <= mjWizard.potCount
+        ? `${step} pot, who win, how much? Who lose, how much?`
+        : step === finalStep
+          ? 'Check the totals before saving.'
+          : 'Optional shared meal cost inside this Mahjong split.';
+
+    let body = '';
+    if (step === 0) {
+      body = `
+        <div class="mj-field">
+          <label>How many pot?</label>
+          <input id="mj-w-pot-count" type="number" inputmode="numeric" min="1" max="20" value="${esc(mjWizard.potCount)}">
+        </div>
+        <label class="mj-chip" style="display:flex;align-items:center;gap:8px;width:max-content;">
+          <input id="mj-w-include-meal" type="checkbox" ${mjWizard.includeMeal?'checked':''}>
+          Include meal money
+        </label>`;
+    } else if (step <= mjWizard.potCount) {
+      const pot = mjWizard.pots[step-1] || defaultMahjongPot(members);
+      mjWizard.pots[step-1] = pot;
+      body = `
+        <div class="mj-grid-2">
+          <div class="mj-field"><label>${step} pot, who win?</label><select id="mj-w-winner">${options}</select></div>
+          <div class="mj-field"><label>How much won (${esc(ccy)})</label><input id="mj-w-win-amt" inputmode="decimal" placeholder="0.00" value="${esc(pot.winnerAmountStr)}"></div>
+          <div class="mj-field"><label>${step} pot, who lose?</label><select id="mj-w-loser">${options}</select></div>
+          <div class="mj-field"><label>How much lost (${esc(ccy)})</label><input id="mj-w-lose-amt" inputmode="decimal" placeholder="0.00" value="${esc(pot.loserAmountStr)}"></div>
+        </div>
+        <div class="hint">The won and lost amounts should match. The app uses that amount to make one transfer from loser to winner.</div>`;
+    } else if (step !== finalStep) {
+      const meal = mjWizard.meal;
+      const splitChips = members.map(n=>`
+        <button class="mj-chip ${meal.split.includes(n)?'winner':''}" type="button" data-mj-meal-split="${esc(n)}">${esc(n)}</button>`).join('');
+      body = `
+        <div class="mj-grid-2">
+          <div class="mj-field"><label>Who paid meal?</label><select id="mj-w-meal-payer">${options}</select></div>
+          <div class="mj-field"><label>Meal amount (${esc(ccy)})</label><input id="mj-w-meal-amt" inputmode="decimal" placeholder="0.00" value="${esc(meal.amountStr)}"></div>
+        </div>
+        <div class="sec-label">Who ate / shares meal?</div>
+        <div class="mj-chip-row">${splitChips}</div>`;
+    } else {
+      body = `
+        <div class="mj-review-list">${mahjongWizardReview(g)}</div>
+        <div class="hint">Saving adds Mahjong transfers and, if included, one meal expense. The Balances and Settle tabs then calculate who owes who.</div>`;
+    }
+
+    c.innerHTML = `
+      <div class="mj-body">
+        <div class="mj-card">
+          <div class="mj-wizard-head">
+            <div>
+              <div class="mj-wizard-title">${esc(title)}</div>
+              <div class="auth-sub" style="margin:6px 0 0;">${esc(sub)}</div>
+            </div>
+            <div class="mj-step-pill">Step ${step+1} / ${finalStep+1}</div>
+          </div>
+          ${body}
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="btn btn-ghost" id="mj-w-back" type="button">${step === 0 ? 'Cancel' : 'Back'}</button>
+            <button class="btn btn-green" id="mj-w-next" type="button">${step === finalStep ? 'Save bill' : 'Continue'}</button>
+          </div>
+        </div>
+      </div>`;
+
+    if (step === 0) {
+      document.getElementById('mj-w-pot-count')?.addEventListener('input', e=>{ mjWizard.potCount = e.target.value; });
+      document.getElementById('mj-w-include-meal')?.addEventListener('change', e=>{ mjWizard.includeMeal = e.target.checked; });
+    } else if (step <= mjWizard.potCount) {
+      const pot = mjWizard.pots[step-1];
+      const winner = document.getElementById('mj-w-winner');
+      const loser = document.getElementById('mj-w-loser');
+      if (winner) winner.value = pot.winner;
+      if (loser) loser.value = pot.loser;
+      winner?.addEventListener('change', e=>{ pot.winner = e.target.value; });
+      loser?.addEventListener('change', e=>{ pot.loser = e.target.value; });
+      document.getElementById('mj-w-win-amt')?.addEventListener('input', e=>{ pot.winnerAmountStr = e.target.value; });
+      document.getElementById('mj-w-lose-amt')?.addEventListener('input', e=>{ pot.loserAmountStr = e.target.value; });
+    } else if (step !== finalStep) {
+      const meal = mjWizard.meal;
+      const payer = document.getElementById('mj-w-meal-payer');
+      if (payer) payer.value = meal.payer;
+      payer?.addEventListener('change', e=>{ meal.payer = e.target.value; });
+      document.getElementById('mj-w-meal-amt')?.addEventListener('input', e=>{ meal.amountStr = e.target.value; });
+      c.querySelectorAll('[data-mj-meal-split]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const n = btn.dataset.mjMealSplit;
+          meal.split = meal.split.includes(n) ? meal.split.filter(x=>x!==n) : [...meal.split,n];
+          renderMahjongWizard(g);
+        });
+      });
+    }
+    document.getElementById('mj-w-back')?.addEventListener('click', ()=>{
+      if (mjWizard.step === 0) return closeMahjongWizard(g);
+      mjWizard.step -= 1;
+      renderMahjongWizard(g);
+    });
+    document.getElementById('mj-w-next')?.addEventListener('click', ()=>advanceMahjongWizard(g));
+  }
+
+  function validateMahjongPot(pot,index) {
+    const winnerAmount = parseAmt(pot.winnerAmountStr || '');
+    const loserAmount = parseAmt(pot.loserAmountStr || '');
+    if (!pot.winner || !pot.loser) throw new Error(`Pick winner and loser for pot ${index+1}.`);
+    if (pot.winner === pot.loser) throw new Error(`Pot ${index+1}: winner and loser must be different.`);
+    if (!winnerAmount && !loserAmount) throw new Error(`Enter amount for pot ${index+1}.`);
+    const amount = winnerAmount || loserAmount;
+    if (winnerAmount && loserAmount && winnerAmount !== loserAmount) throw new Error(`Pot ${index+1}: win and lose amounts must match.`);
+    return amount;
+  }
+
+  function advanceMahjongWizard(g) {
+    try {
+      if (mjWizard.step === 0) {
+        syncMahjongWizardPots(g);
+        if (mjWizard.meal.split.length === 0) mjWizard.meal.split = [...(g.members || [])];
+      } else if (mjWizard.step <= mjWizard.potCount) {
+        validateMahjongPot(mjWizard.pots[mjWizard.step-1], mjWizard.step-1);
+      } else if (mjWizard.step !== mahjongWizardFinalStep()) {
+        if (!mjWizard.meal.payer) throw new Error('Pick who paid for the meal.');
+        if (!parseAmt(mjWizard.meal.amountStr || '')) throw new Error('Enter the meal amount.');
+        if (!mjWizard.meal.split.length) throw new Error('Pick at least one person to split the meal.');
+      } else {
+        saveMahjongWizard(g);
+        return;
+      }
+      mjWizard.step += 1;
+      renderMahjongWizard(g);
+    } catch(err) {
+      alert(err.message);
+    }
+  }
+
+  function createMealExpense(g, meal) {
+    const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
+    const originalAmount = parseAmt(meal.amountStr || '');
+    const cnyFen = toCny(originalAmount, ccy, g.fxRates);
+    return {
+      id: uid(),
+      source: 'meal',
+      category: 'Meal',
+      categoryIcon: '🍽️',
+      description: 'Mahjong meal money',
+      originalAmount,
+      currency: ccy,
+      cnyFen,
+      paidBy: meal.payer,
+      splitAmong: [...meal.split],
+      date: today(),
+      createdByDevice: profile.id,
+      createdByUser: authSession?.user?.id || null,
+      inputtedBy: profile.name || null,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function saveMahjongWizard(g) {
+    try {
+      const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
+      const exps = mjWizard.pots.map((pot,index) => {
+        const amount = validateMahjongPot(pot,index);
+        const cnyFen = toCny(amount, ccy, g.fxRates);
+        return createMahjongExpense(g, pot.loser, pot.winner, cnyFen, `Pot ${index+1}: ${pot.loser} pays ${pot.winner}`);
+      });
+      if (mjWizard.includeMeal) exps.push(createMealExpense(g, mjWizard.meal));
+      mjWizard.open = false;
+      saveMahjongExpenses(g, exps);
+    } catch(err) {
+      alert(err.message);
+    }
+  }
+
   function renderMahjong(g) {
     const c = document.getElementById('tp-mahjong');
     if (!c) return;
@@ -4913,9 +5288,15 @@
       c.innerHTML = '';
       return;
     }
+    if (mjWizard.open) {
+      renderMahjongWizard(g);
+      return;
+    }
     const members = [...(g.members || [])].sort();
     const entries = mahjongExpenses(g).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-    const total = entries.reduce((s,e)=>s+(e.cnyFen||0),0);
+    const billEntries = mahjongBillEntries(g);
+    const mealTotal = billEntries.filter(e=>e.source === 'meal').reduce((s,e)=>s+(e.cnyFen||0),0);
+    const total = billEntries.reduce((s,e)=>s+(e.cnyFen||0),0);
     const options = members.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
     const chips = members.map(n=>`
       <button class="mj-chip ${mjLosers.has(n)?'loser':''}" type="button" data-mj-loser="${esc(n)}">${esc(n)}</button>`).join('');
@@ -4946,9 +5327,16 @@
         <div class="mj-card">
           <div class="mj-summary">
             <div><div class="mj-summary-val num">${entries.length}</div><div class="mj-summary-label">Transfers</div></div>
-            <div><div class="mj-summary-val num">${displayFmt(total,g)}</div><div class="mj-summary-label">MJ total</div></div>
+            <div><div class="mj-summary-val num">${displayFmt(total,g)}</div><div class="mj-summary-label">Session total</div></div>
             <div><div class="mj-summary-val num">${members.length}</div><div class="mj-summary-label">Players</div></div>
           </div>
+          ${mealTotal ? `<div class="hint" style="margin-top:12px;text-align:center;">Includes meal money: ${displayFmt(mealTotal,g)}</div>` : ''}
+        </div>
+
+        <div class="mj-card">
+          <div class="mj-card-title">Guided Mahjong bill</div>
+          <div class="hint" style="margin-bottom:12px;">Use this for a full session: how many pots, winner/loser per pot, and optional meal money.</div>
+          <button class="btn btn-green" id="mj-start-wizard" type="button">＋ Add Mahjong bill</button>
         </div>
 
         <div class="mj-card">
@@ -4994,6 +5382,7 @@
       const cnyFen = toCny(minor, g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates);
       saveMahjongExpenses(g, [createMahjongExpense(g, from, to, cnyFen, `Mahjong: ${from} pays ${to}`)]);
     });
+    document.getElementById('mj-start-wizard')?.addEventListener('click', ()=>startMahjongWizard(g));
     c.querySelectorAll('[data-mj-loser]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const n = btn.dataset.mjLoser;
@@ -5446,7 +5835,7 @@
         <button class="btn btn-green btn-sm js-paid">Paid</button>
       </div>
       <div class="settle-summary">
-        <details open>
+        <details>
           <summary>What is ${esc(tx.from)} paying ${esc(tx.to)} for?</summary>
           ${settlementDetailsHTML(g,tx,mode)}
         </details>
@@ -5498,18 +5887,7 @@
     lines.push('', 'Settle up:');
     if (txs.length) {
       txs.forEach((tx,i) => {
-        const summary = expenseSummaryForSettlement(g,tx);
-        const directText = summary.fromOwesRows.slice(0,3).map(x =>
-          `${x.title} (${displayFmt(x.share,g)})`
-        ).join('; ');
-        const offsetText = summary.toOwesRows.length
-          ? `; offset by ${summary.toOwesRows.slice(0,2).map(x=>`${x.title} (${displayFmt(x.share,g)})`).join('; ')}`
-          : '';
-        const reason = directText
-          ? `What ${tx.from} is paying ${tx.to} for: ${directText}${offsetText}`
-          : `What ${tx.from} is paying ${tx.to} for: net balance across all active entries and previous payments.`;
         lines.push(`${i+1}. ${tx.from} pays ${tx.to}: ${displayFmt(tx.amt,g)}`);
-        lines.push(`   ${reason}`);
       });
     } else {
       lines.push('Everyone is settled. No payments needed.');
@@ -5519,18 +5897,11 @@
     return lines.join('\n');
   }
 
-  function shareSettleToWhatsApp(g) {
+  function copySettleBill(g) {
     const text = settlementWhatsAppMessage(g);
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    navigator.clipboard?.writeText(text).catch(()=>{});
-    const opened = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      if (navigator.share) {
-        navigator.share({title:`${g.name} final bill`, text}).catch(()=>{});
-      } else {
-        prompt('Copy this final bill message:', text);
-      }
-    }
+    navigator.clipboard?.writeText(text)
+      .then(()=>alert('Bill copied.'))
+      .catch(()=>prompt('Copy this bill:', text));
   }
 
   function renderSettle(g) {
@@ -5564,10 +5935,10 @@
           </button>
         </div>
         <div class="settle-share-row">
-          <button class="btn btn-green btn-sm" id="settle-whatsapp-share" type="button">Share final bill to WhatsApp</button>
+          <button class="btn btn-green btn-sm" id="settle-whatsapp-share" type="button">Copy bill</button>
         </div>
       </section>`;
-    shell.querySelector('#settle-whatsapp-share')?.addEventListener('click', ()=>shareSettleToWhatsApp(g));
+    shell.querySelector('#settle-whatsapp-share')?.addEventListener('click', ()=>copySettleBill(g));
     shell.querySelectorAll('[data-settle-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         settleViewMode = btn.dataset.settleMode === 'activity' ? 'activity' : 'min';
