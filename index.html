@@ -492,7 +492,10 @@
       background: var(--card); border-radius: var(--r-sm);
       border: 1px solid var(--border); margin-bottom: 8px;
     }
-    .mtag .mname { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    .mtag .mtext { flex: 1; min-width: 0; }
+    .mtag .mname { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+    .mtag .mjoin { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mtag .mjoin.joined { color: var(--green-dark); font-weight: 700; }
     .mtag .mrm {
       width: 28px; height: 28px; border: none; background: none;
       color: var(--muted); font-size: 20px; cursor: pointer;
@@ -542,6 +545,14 @@
       padding: 0 10px;
       font-size: 14px;
       font-weight: 700;
+    }
+    .claim-summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
     }
 
     .fx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -4150,6 +4161,7 @@
       trip_id: g.remoteTripId || g.id,
       user_id: authSession?.user?.id,
       display_name: profile.name || authSession?.user?.email?.split('@')[0] || 'Member',
+      account_email: authSession?.user?.email || null,
       role: isGroupOwner(g) ? 'owner' : 'member',
     };
   }
@@ -4159,6 +4171,7 @@
       id: `${g.remoteTripId || g.id}:${name.toLowerCase()}`,
       trip_id: g.remoteTripId || g.id,
       name,
+      claimed_by_user: name === g.iAm ? authSession?.user?.id || null : undefined,
       device_id: name === profile.name ? profile.id : null,
       created_by_user: authSession?.user?.id || null,
     }));
@@ -5037,20 +5050,41 @@
   function renderMtags() {
     const list=document.getElementById('members-list');
     list.innerHTML='';
+    const g = cgState.editId ? groups.find(x=>x.id===cgState.editId) : null;
+    const claims = g?.memberClaims || [];
+    const accounts = new Map((g?.authMembers || []).map(m => [m.user_id, m]));
     cgState.members.forEach((name,idx)=>{
+      const claim = claims.find(m => (m.name || '').toLowerCase() === name.toLowerCase() && m.claimed_by_user);
+      const account = claim ? accounts.get(claim.claimed_by_user) : null;
       const tag=document.createElement('div');
       tag.className='mtag';
       tag.appendChild(av(name,'av-sm'));
+      const text=document.createElement('div'); text.className='mtext';
       const n=document.createElement('div'); n.className='mname'; n.textContent=name;
+      text.appendChild(n);
+      if (g?.remoteTripId) {
+        const joined=document.createElement('div');
+        joined.className='mjoin'+(account?' joined':'');
+        joined.textContent=account ? `Joined: ${accountLabel(account)}` : 'Not joined yet';
+        text.appendChild(joined);
+      }
       const rm=document.createElement('button'); rm.className='mrm'; rm.textContent='×';
       rm.addEventListener('click', ()=>{
         cgState.members.splice(idx,1);
         if (cgState.iAm===name) cgState.iAm=cgState.members[0]||null;
         renderMtags(); renderClaimManager(); renderIam();
       });
-      tag.appendChild(n); tag.appendChild(rm);
+      tag.appendChild(text); tag.appendChild(rm);
       list.appendChild(tag);
     });
+  }
+
+  function accountLabel(account) {
+    const display = account?.display_name || 'Member';
+    const email = account?.account_email || account?.email || '';
+    return email && email.toLowerCase() !== display.toLowerCase()
+      ? `${display} · ${email}`
+      : display;
   }
 
   function renderClaimManager() {
@@ -5060,35 +5094,43 @@
     const g = cgState.editId ? groups.find(x=>x.id===cgState.editId) : null;
     if (!g || !g.remoteTripId || !isGroupOwner(g)) return;
     const accounts = (g.authMembers || []).filter(m => m.status !== 'declined');
-    if (!accounts.length) return;
     const claims = g.memberClaims || [];
-    const claimedBy = new Map(claims.filter(m => m.claimed_by_user).map(m => [m.claimed_by_user, m.name]));
-    const claimedOwnerByName = new Map(claims.filter(m => m.claimed_by_user).map(m => [m.name, m.claimed_by_user]));
-    const roleLabel = m => (m.role === 'owner' || m.user_id === g.creatorUserId) ? 'Owner' : (m.role === 'manager' ? 'Manager' : 'Member');
+    const claimedByName = new Map(claims.filter(m => m.claimed_by_user).map(m => [(m.name || '').toLowerCase(), m.claimed_by_user]));
+    const claimedByUser = new Map(claims.filter(m => m.claimed_by_user).map(m => [m.claimed_by_user, m.name]));
+    const joinedCount = (cgState.members || []).filter(name => claimedByName.has(name.toLowerCase())).length;
+    const optionsFor = (selectedUserId='') => ['<option value="">Not joined / unassigned</option>'].concat(accounts.map(account => {
+      const currentName = claimedByUser.get(account.user_id);
+      const note = currentName && account.user_id !== selectedUserId ? ` (now ${currentName})` : '';
+      return `<option value="${esc(account.user_id)}" ${selectedUserId===account.user_id?'selected':''}>${esc(accountLabel(account) + note)}</option>`;
+    })).join('');
     c.innerHTML = `
       <div class="claim-manager">
-        <div class="sec-label" style="margin-bottom:6px;">Account name matching</div>
-        <div class="hint" style="margin-bottom:8px;">Move an account to the correct split name if someone picked the wrong one.</div>
-        ${accounts.map(m => {
-          const selected = claimedBy.get(m.user_id) || '';
-          const opts = ['<option value="">Unassigned</option>'].concat((cgState.members || []).map(name => {
-            const ownerId = claimedOwnerByName.get(name);
-            const taken = ownerId && ownerId !== m.user_id;
-            const suffix = taken ? ' (claimed)' : '';
-            return `<option value="${esc(name)}" ${selected===name?'selected':''}>${esc(name + suffix)}</option>`;
-          })).join('');
+        <div class="sec-label" style="margin-bottom:6px;">Join status and account matching</div>
+        <div class="claim-summary">
+          <span>${joinedCount} / ${(cgState.members || []).length} names claimed</span>
+          <span>${accounts.length} account${accounts.length===1?'':'s'} joined</span>
+        </div>
+        <div class="hint" style="margin-bottom:8px;">Choose which joined account belongs to each split name. Selecting an account here moves it from any previous name.</div>
+        ${(cgState.members || []).map(name => {
+          const selectedUserId = claimedByName.get(name.toLowerCase()) || '';
           return `
             <div class="claim-row">
               <div class="claim-account">
-                <div class="claim-name">${esc(m.display_name || 'Member')}</div>
-                <div class="claim-meta">${esc(roleLabel(m))}</div>
+                <div class="claim-name">${esc(name)}</div>
+                <div class="claim-meta">${selectedUserId ? 'Joined' : 'Not joined yet'}</div>
               </div>
-              <select class="claim-select" data-claim-user="${esc(m.user_id)}">${opts}</select>
+              <select class="claim-select" data-claim-name="${esc(name)}" data-current-user="${esc(selectedUserId)}">${optionsFor(selectedUserId)}</select>
             </div>`;
         }).join('')}
       </div>`;
-    c.querySelectorAll('[data-claim-user]').forEach(sel=>{
-      sel.addEventListener('change', ()=>assignMemberClaim(g, sel.dataset.claimUser, sel.value));
+    c.querySelectorAll('[data-claim-name]').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const nextUser = sel.value;
+        const currentUser = sel.dataset.currentUser;
+        if (nextUser) assignMemberClaim(g, nextUser, sel.dataset.claimName);
+        else if (currentUser) assignMemberClaim(g, currentUser, '');
+        else renderClaimManager();
+      });
     });
   }
 
@@ -6137,7 +6179,7 @@
       return `
         <div class="manager-row">
           <div>
-            <div class="manager-name">${esc(m.display_name || 'Member')}</div>
+            <div class="manager-name">${esc(accountLabel(m))}</div>
             <div class="manager-role">${esc(label)}</div>
           </div>
           ${isOwner ? '' : `<button class="btn btn-ghost btn-sm js-role-toggle" data-user-id="${esc(m.user_id)}" data-next-role="${m.role === 'manager' ? 'member' : 'manager'}">${m.role === 'manager' ? 'Remove manager' : 'Make manager'}</button>`}
@@ -6250,6 +6292,7 @@
       }
       cgState.members = [...(g.members || [])];
       cgState.memberClaims = [...(g.memberClaims || [])];
+      renderMtags();
       renderClaimManager();
       renderIam();
       saveAllAppData();
@@ -6276,7 +6319,7 @@
       g.remoteShareCode = row.share_code;
       g.joinedUserId = authSession.user.id;
       g.creatorUserId = g.creatorUserId || authSession.user.id;
-      g.authMembers = g.authMembers || [{ user_id: authSession.user.id, display_name: profile.name || 'Owner', role: 'owner' }];
+      g.authMembers = g.authMembers || [{ user_id: authSession.user.id, display_name: profile.name || 'Owner', account_email: authSession.user.email || null, role: 'owner' }];
 
       if (!wasOnline) {
         const created = await db('rpc/create_trip_with_membership', {
@@ -6289,6 +6332,7 @@
             p_base_currency: row.base_currency,
             p_fx_rates: row.fx_rates,
             p_display_name: remoteTripMemberRow(g).display_name,
+            p_account_email: remoteTripMemberRow(g).account_email,
             p_created_by_device: row.created_by_device,
           },
         });
@@ -6467,7 +6511,7 @@
       if (!joinName) return;
       const tripRows = await db('rpc/join_trip_by_code', {
         method:'POST',
-        body:{ p_share_code:code, p_display_name:joinName },
+        body:{ p_share_code:code, p_display_name:joinName, p_account_email: authSession?.user?.email || null },
       });
       const trip = tripRows?.[0];
       if (!trip) throw new Error('No online record found for that code.');

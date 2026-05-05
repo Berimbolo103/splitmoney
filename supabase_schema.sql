@@ -28,6 +28,7 @@ create table if not exists public.trip_members (
   trip_id text not null references public.trips(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   display_name text not null,
+  account_email text,
   role text not null default 'member',
   status text not null default 'pending' check (status in ('pending','approved','declined')),
   requested_at timestamptz not null default now(),
@@ -89,6 +90,7 @@ alter table public.trips add column if not exists kind text not null default 'tr
 alter table public.trips add column if not exists cover_photo text;
 alter table public.members add column if not exists claimed_by_user uuid references auth.users(id) on delete set null;
 alter table public.trip_members add column if not exists status text not null default 'pending';
+alter table public.trip_members add column if not exists account_email text;
 alter table public.trip_members add column if not exists requested_at timestamptz not null default now();
 alter table public.trip_members add column if not exists responded_at timestamptz;
 alter table public.trip_members add column if not exists responded_by uuid references auth.users(id) on delete set null;
@@ -239,6 +241,8 @@ grant execute on function public.is_trip_owner(text) to authenticated;
 -- Create a trip and the creator membership together. A direct insert into
 -- trips cannot satisfy member-only RLS yet because the creator is not a member
 -- until the membership row exists.
+drop function if exists public.create_trip_with_membership(text, text, text, text, text, jsonb, text, text);
+drop function if exists public.create_trip_with_membership(text, text, text, text, text, jsonb, text, text, text);
 create or replace function public.create_trip_with_membership(
   p_id text,
   p_share_code text,
@@ -247,6 +251,7 @@ create or replace function public.create_trip_with_membership(
   p_base_currency text,
   p_fx_rates jsonb,
   p_display_name text,
+  p_account_email text,
   p_created_by_device text
 )
 returns table (
@@ -315,11 +320,12 @@ begin
     returning * into v_trip;
   end if;
 
-  insert into public.trip_members (trip_id, user_id, display_name, role, status, responded_at, responded_by)
-  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'owner', 'approved', now(), auth.uid())
+  insert into public.trip_members (trip_id, user_id, display_name, account_email, role, status, responded_at, responded_by)
+  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), nullif(trim(coalesce(p_account_email, '')), ''), 'owner', 'approved', now(), auth.uid())
   on conflict (trip_id, user_id)
   do update set
     display_name = excluded.display_name,
+    account_email = excluded.account_email,
     role = 'owner',
     status = 'approved',
     responded_at = now(),
@@ -338,7 +344,7 @@ begin
 end;
 $$;
 
-grant execute on function public.create_trip_with_membership(text, text, text, text, text, jsonb, text, text) to authenticated;
+grant execute on function public.create_trip_with_membership(text, text, text, text, text, jsonb, text, text, text) to authenticated;
 
 -- Trips: creators can insert; members can read/update/delete.
 drop policy if exists "splittrip members read trips" on public.trips;
@@ -476,9 +482,11 @@ using (public.is_trip_member(trip_id));
 
 -- Join by invite code. Users who know the code become approved members.
 drop function if exists public.join_trip_by_code(text, text);
+drop function if exists public.join_trip_by_code(text, text, text);
 create or replace function public.join_trip_by_code(
   p_share_code text,
-  p_display_name text
+  p_display_name text,
+  p_account_email text
 )
 returns table (
   id text,
@@ -517,11 +525,12 @@ begin
     raise exception 'Pick one of the member names added by the owner';
   end if;
 
-  insert into public.trip_members (trip_id, user_id, display_name, role, status, requested_at, responded_at, responded_by)
-  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), 'member', 'approved', now(), now(), auth.uid())
+  insert into public.trip_members (trip_id, user_id, display_name, account_email, role, status, requested_at, responded_at, responded_by)
+  values (v_trip.id, auth.uid(), coalesce(nullif(trim(p_display_name), ''), 'Member'), nullif(trim(coalesce(p_account_email, '')), ''), 'member', 'approved', now(), now(), auth.uid())
   on conflict (trip_id, user_id)
   do update set
     display_name = excluded.display_name,
+    account_email = excluded.account_email,
     status = 'approved',
     responded_at = now(),
     responded_by = auth.uid();
@@ -555,7 +564,7 @@ begin
 end;
 $$;
 
-grant execute on function public.join_trip_by_code(text, text) to authenticated;
+grant execute on function public.join_trip_by_code(text, text, text) to authenticated;
 drop function if exists public.respond_trip_join_request(text, uuid, text);
 
 drop function if exists public.preview_trip_join_options(text);
