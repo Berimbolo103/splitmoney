@@ -486,6 +486,50 @@
       display: flex; align-items: center; justify-content: center; border-radius: 50%;
     }
     .mtag .mrm:active { background: #f0f0f0; color: var(--red); }
+    .claim-manager {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+    }
+    .claim-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(140px, .9fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .claim-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .claim-account {
+      min-width: 0;
+    }
+    .claim-name {
+      font-size: 13px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .claim-meta {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-top: 2px;
+    }
+    .claim-select {
+      width: 100%;
+      min-height: 42px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
 
     .fx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .fx-item label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
@@ -3016,6 +3060,7 @@
         <button class="btn btn-green btn-sm" id="add-mbr-btn">Add</button>
       </div>
       <div id="members-list"></div>
+      <div id="member-claim-manager"></div>
 
       <div class="mt20"></div>
       <div class="sec-label">Base Currency</div>
@@ -4848,6 +4893,7 @@
       cgState = {
         editId, kind:groupKind(grp), emoji:grp.emoji||'🌏',
         members:[...(grp.members||[])],
+        memberClaims:[...(grp.memberClaims||[])],
         baseCcy:MAIN_CURRENCY,
         fx:{...DEFAULT_FX_RATES, ...grp.fxRates},
         iAm:grp.iAm||null,
@@ -4859,7 +4905,7 @@
     } else {
       const t = appConfig(createKind);
       cgState = {
-        editId:null, kind:createKind, emoji:t.emoji, members:[],
+        editId:null, kind:createKind, emoji:t.emoji, members:[], memberClaims:[],
         baseCcy:MAIN_CURRENCY, fx:{...DEFAULT_FX_RATES}, iAm:profile.name||null, coverPhoto:null, coverUpload:null
       };
       document.getElementById('cg-title').textContent=t.createTitle;
@@ -4904,6 +4950,7 @@
     setCoverPreview();
 
     renderMtags();
+    renderClaimManager();
 
     // base currency
     const bcp = document.getElementById('base-ccy-picker');
@@ -4943,10 +4990,49 @@
       rm.addEventListener('click', ()=>{
         cgState.members.splice(idx,1);
         if (cgState.iAm===name) cgState.iAm=cgState.members[0]||null;
-        renderMtags(); renderIam();
+        renderMtags(); renderClaimManager(); renderIam();
       });
       tag.appendChild(n); tag.appendChild(rm);
       list.appendChild(tag);
+    });
+  }
+
+  function renderClaimManager() {
+    const c = document.getElementById('member-claim-manager');
+    if (!c) return;
+    c.innerHTML = '';
+    const g = cgState.editId ? groups.find(x=>x.id===cgState.editId) : null;
+    if (!g || !g.remoteTripId || !isGroupOwner(g)) return;
+    const accounts = (g.authMembers || []).filter(m => m.status !== 'declined');
+    if (!accounts.length) return;
+    const claims = g.memberClaims || [];
+    const claimedBy = new Map(claims.filter(m => m.claimed_by_user).map(m => [m.claimed_by_user, m.name]));
+    const claimedOwnerByName = new Map(claims.filter(m => m.claimed_by_user).map(m => [m.name, m.claimed_by_user]));
+    const roleLabel = m => (m.role === 'owner' || m.user_id === g.creatorUserId) ? 'Owner' : (m.role === 'manager' ? 'Manager' : 'Member');
+    c.innerHTML = `
+      <div class="claim-manager">
+        <div class="sec-label" style="margin-bottom:6px;">Account name matching</div>
+        <div class="hint" style="margin-bottom:8px;">Move an account to the correct split name if someone picked the wrong one.</div>
+        ${accounts.map(m => {
+          const selected = claimedBy.get(m.user_id) || '';
+          const opts = ['<option value="">Unassigned</option>'].concat((cgState.members || []).map(name => {
+            const ownerId = claimedOwnerByName.get(name);
+            const taken = ownerId && ownerId !== m.user_id;
+            const suffix = taken ? ' (claimed)' : '';
+            return `<option value="${esc(name)}" ${selected===name?'selected':''}>${esc(name + suffix)}</option>`;
+          })).join('');
+          return `
+            <div class="claim-row">
+              <div class="claim-account">
+                <div class="claim-name">${esc(m.display_name || 'Member')}</div>
+                <div class="claim-meta">${esc(roleLabel(m))}</div>
+              </div>
+              <select class="claim-select" data-claim-user="${esc(m.user_id)}">${opts}</select>
+            </div>`;
+        }).join('')}
+      </div>`;
+    c.querySelectorAll('[data-claim-user]').forEach(sel=>{
+      sel.addEventListener('change', ()=>assignMemberClaim(g, sel.dataset.claimUser, sel.value));
     });
   }
 
@@ -5008,6 +5094,7 @@
         obj.creatorName=groups[idx].creatorName;
         obj.joinedUserId=groups[idx].joinedUserId;
         obj.authMembers=groups[idx].authMembers||[];
+        obj.memberClaims=groups[idx].memberClaims||[];
         groups[idx]=obj;
         if (obj.remoteTripId) publishGroupOnline(obj,false).catch(()=>{});
       }
@@ -6083,6 +6170,35 @@
     }
   }
 
+  async function assignMemberClaim(g, userId, memberName) {
+    if (!g?.remoteTripId || !userId) return;
+    if (!isGroupOwner(g)) {
+      alert('Only the group owner can reassign accounts to names.');
+      return;
+    }
+    try {
+      await db('rpc/assign_trip_member_claim', {
+        method: 'POST',
+        body: { p_trip_id: g.remoteTripId, p_user_id: userId, p_member_name: memberName || null },
+      });
+      await syncGroupOnline(g,true);
+      const selected = memberName || null;
+      if (userId === authSession?.user?.id && selected) {
+        g.iAm = selected;
+        profile.name = selected;
+        saveProfile();
+      }
+      cgState.members = [...(g.members || [])];
+      cgState.memberClaims = [...(g.memberClaims || [])];
+      renderClaimManager();
+      renderIam();
+      saveAllAppData();
+    } catch(err) {
+      alert(`Could not reassign this account:\n${err.message}`);
+      renderClaimManager();
+    }
+  }
+
   async function publishGroupOnline(g, showAlert=true) {
     if (!onlineReady()) {
       alert('Supabase is not configured yet. Paste your project URL and anon key into SUPABASE_URL and SUPABASE_ANON_KEY in index.html.');
@@ -6155,6 +6271,14 @@
           body: members,
         });
       }
+      if (wasOnline && Array.isArray(g.memberClaims)) {
+        const keep = new Set((g.members || []).map(name => name.toLowerCase()));
+        const removed = g.memberClaims.filter(m => m?.id && !keep.has((m.name || '').toLowerCase()));
+        await Promise.all(removed.map(m => db(`members?id=eq.${encodeURIComponent(m.id)}`, {
+          method:'DELETE',
+          prefer:'return=minimal',
+        })));
+      }
 
       const expenses = (g.expenses||[]).map(e=>remoteExpenseRow(g,e));
       if (expenses.length) {
@@ -6217,9 +6341,8 @@
       g.creatorUserId = g.creatorUserId || trip.created_by_user || null;
       g.finalizedAt = trip.finalized_at || undefined;
       g.authMembers = authMembers || [];
-
-      const names = new Set(g.members||[]);
-      (members||[]).forEach(m=>{ if (m.name && !names.has(m.name)) { names.add(m.name); g.members.push(m.name); } });
+      g.memberClaims = members || [];
+      if ((members || []).length) g.members = members.map(m=>m.name).filter(Boolean);
 
       const byId = new Map((g.expenses||[]).map(e=>[e.id,e]));
       (expenses||[]).forEach(r=>byId.set(r.id, expenseFromRemote(r)));
@@ -6239,14 +6362,19 @@
   }
 
   async function chooseJoinMemberName(code) {
+    let rows = [];
     let options = [];
     try {
-      const rows = await db('rpc/preview_trip_join_options', {
+      rows = await db('rpc/preview_trip_join_options', {
         method: 'POST',
         body: { p_share_code: code },
       });
-      options = (rows || []).map(r => r.name).filter(Boolean);
+      options = (rows || []).filter(r => r.is_available !== false).map(r => r.name).filter(Boolean);
     } catch(e) {}
+    if ((rows || []).length && !options.length) {
+      alert('All names in this split have already been claimed. Ask the group owner to release or reassign a name in group settings.');
+      return '';
+    }
     if (!options.length) {
       const fallback = profile.name || authSession?.user?.email?.split('@')[0] || 'Member';
       return (prompt('Who are you in this split?', fallback) || '').trim();
@@ -7324,7 +7452,7 @@
       cgState.members.push(name);
       if (!cgState.iAm || name.toLowerCase()===profile.name.toLowerCase()) cgState.iAm=name;
       inp.value='';
-      renderMtags(); renderIam();
+      renderMtags(); renderClaimManager(); renderIam();
     });
     document.getElementById('mname-input').addEventListener('keydown', e=>{
       if (e.key==='Enter') document.getElementById('add-mbr-btn').click();
