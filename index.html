@@ -215,6 +215,16 @@
     }
     .group-hero-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
     .group-hero-title { font-size: 19px; font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hero-share-btn {
+      margin-left: auto;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.3);
+      color: #fff;
+      box-shadow: none;
+      width: auto;
+      min-height: 34px;
+      padding: 0 12px;
+    }
 
     .bubbles { display: flex; gap: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .bubbles::-webkit-scrollbar { display: none; }
@@ -2636,6 +2646,31 @@
       border-color: rgba(28,194,159,.35);
       color: var(--green-dark);
     }
+    .mj-item-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .mj-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .mj-item-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .mj-item-count {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
     .mj-row {
       display: grid;
       grid-template-columns: minmax(0,1fr) auto;
@@ -3023,6 +3058,7 @@
         <div class="group-hero-top">
           <div class="group-hero-icon" id="g-icon">✈️</div>
           <div class="live-chip" id="g-live-chip"><span></span> Live</div>
+          <button class="btn btn-ghost btn-sm hero-share-btn js-share" id="g-hero-share" type="button">Share</button>
         </div>
         <div class="group-hero-copy">
           <div class="group-hero-title" id="g-title"></div>
@@ -5042,6 +5078,8 @@
     const liveChip = document.getElementById('g-live-chip');
     if (liveChip) liveChip.innerHTML = `<span></span> ${g.remoteTripId ? 'Live' : 'Local'} · ${g.members.length}`;
     document.getElementById('g-title').textContent=g.name;
+    const heroShare = document.getElementById('g-hero-share');
+    if (heroShare) heroShare.textContent = g.remoteTripId ? 'Share' : 'Share';
     const addQuick = document.getElementById('g-add-quick');
     if (addQuick) addQuick.textContent = cfg.addLabel;
     const editBtn = document.getElementById('g-edit');
@@ -5059,6 +5097,7 @@
       const sp=document.createElement('span'); sp.textContent=name;
       bub.appendChild(a); bub.appendChild(sp); bb.appendChild(bub);
     });
+    bindShare(g);
 
     // my balance banner
     const net=balances(g);
@@ -5098,12 +5137,11 @@
     document.getElementById('g-meta').textContent=`Mahjong session · ${g.members.length} players · ${mahjongExpenses(g).length} payouts · Settlement ${displayFmt(groupTotalSpent(g),g)}`;
     setDetailTabs([
       ['mahjong', 'Calculator'],
-      ['expenses', 'History'],
       ['balances', 'Balances'],
       ['settle', 'Settle'],
     ]);
     renderMahjong(g);
-    renderMahjongHistory(g);
+    document.getElementById('tp-expenses').innerHTML = '';
     renderBalances(g);
     renderSettle(g);
   }
@@ -5130,7 +5168,7 @@
 
   function setTab(name) {
     const g = getGroup();
-    if (g && groupKind(g) === 'mahjong' && !['mahjong','expenses','balances','settle'].includes(name)) name = 'mahjong';
+    if (g && groupKind(g) === 'mahjong' && !['mahjong','balances','settle'].includes(name)) name = 'mahjong';
     if (g && groupKind(g) !== 'mahjong' && name === 'mahjong') name = 'expenses';
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
     document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('on',p.id===`tp-${name}`));
@@ -5393,6 +5431,15 @@
     };
   }
 
+  function defaultMahjongMeal(members) {
+    return {
+      item:'',
+      payer:members[0] || '',
+      amountStr:'',
+      split:[],
+    };
+  }
+
   function startMahjongWizard(g) {
     const members = [...(g.members || [])].sort();
     if (members.length < 4) {
@@ -5405,7 +5452,7 @@
       potCount:1,
       includeMeal:false,
       pots:[defaultMahjongPot(members)],
-      meal:{ payer:members[0] || '', amountStr:'', split:[...members] },
+      meals:[defaultMahjongMeal(members)],
     };
     renderMahjong(g);
   }
@@ -5427,6 +5474,19 @@
     return mjWizard.potCount + (mjWizard.includeMeal ? 1 : 0) + 1;
   }
 
+  function mahjongWizardMeals(g) {
+    const members = [...(g.members || [])].sort();
+    if (!Array.isArray(mjWizard.meals)) {
+      mjWizard.meals = mjWizard.meal ? [{...defaultMahjongMeal(members), ...mjWizard.meal}] : [defaultMahjongMeal(members)];
+    }
+    if (!mjWizard.meals.length) mjWizard.meals.push(defaultMahjongMeal(members));
+    mjWizard.meals.forEach(meal => {
+      if (!meal.payer) meal.payer = members[0] || '';
+      if (!Array.isArray(meal.split)) meal.split = [];
+    });
+    return mjWizard.meals;
+  }
+
   function mahjongWizardReview(g) {
     const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
     const potRows = mjWizard.pots.map((pot,i) => {
@@ -5446,12 +5506,15 @@
           <strong class="num">${fmt(Math.max(winnerTotal, loserTotal),ccy)}</strong>
         </div>`;
     }).join('');
-    const mealAmount = parseAmt(mjWizard.meal.amountStr || '');
-    const mealRow = mjWizard.includeMeal ? `
-      <div class="mj-review-row">
-        <span>Meal: <strong>${esc(mjWizard.meal.payer)}</strong> paid, split by ${mjWizard.meal.split.length} people</span>
-        <strong class="num">${fmt(mealAmount,ccy)}</strong>
-      </div>` : '';
+    const mealRow = mjWizard.includeMeal ? mahjongWizardMeals(g).map((meal,i) => {
+      const mealAmount = parseAmt(meal.amountStr || '');
+      const label = meal.item || `Meal item ${i+1}`;
+      return `
+        <div class="mj-review-row">
+          <span>${esc(label)}: <strong>${esc(meal.payer)}</strong> paid, split by ${meal.split.length} people</span>
+          <strong class="num">${fmt(mealAmount,ccy)}</strong>
+        </div>`;
+    }).join('') : '';
     return `${potRows}${mealRow}`;
   }
 
@@ -5535,20 +5598,33 @@
         </div>
         <div class="hint">Each leg can be one player plus up to 3 partners. A person can only be in one leg. Winner totals must match loser totals. Leave both sides empty for a no-score pot.</div>`;
     } else if (step !== finalStep) {
-      const meal = mjWizard.meal;
-      const splitChips = members.map(n=>`
-        <button class="mj-chip ${meal.split.includes(n)?'winner':''}" type="button" data-mj-meal-split="${esc(n)}">${esc(n)}</button>`).join('');
+      const meals = mahjongWizardMeals(g);
+      const mealCards = meals.map((meal,mealIndex) => {
+        const splitChips = members.map(n=>`
+          <button class="mj-chip ${meal.split.includes(n)?'winner':''}" type="button" data-mj-meal-index="${mealIndex}" data-mj-meal-split="${esc(n)}">${esc(n)}</button>`).join('');
+        return `
+          <div class="mj-item-card">
+            <div class="mj-item-head">
+              <div class="mj-item-title">Item ${mealIndex+1}</div>
+              ${meals.length > 1 ? `<button class="del-btn" type="button" data-mj-remove-meal="${mealIndex}" title="Remove item">×</button>` : ''}
+            </div>
+            <div class="mj-grid-2">
+              <div class="mj-field"><label>Item name</label><input data-mj-meal-item="${mealIndex}" placeholder="Dinner, drinks, dessert" value="${esc(meal.item || '')}"></div>
+              <div class="mj-field"><label>Who paid?</label><select data-mj-meal-payer="${mealIndex}">${options}</select></div>
+            </div>
+            <div class="mj-field"><label>Price (${esc(ccy)})</label><input data-mj-meal-amt="${mealIndex}" inputmode="decimal" placeholder="0.00" value="${esc(meal.amountStr || '')}"></div>
+            <div class="mj-item-count">${meal.split.length} sharing</div>
+            <div class="mj-chip-row">${splitChips}</div>
+          </div>`;
+      }).join('');
       body = `
-        <div class="mj-grid-2">
-          <div class="mj-field"><label>Who paid meal?</label><select id="mj-w-meal-payer">${options}</select></div>
-          <div class="mj-field"><label>Meal amount (${esc(ccy)})</label><input id="mj-w-meal-amt" inputmode="decimal" placeholder="0.00" value="${esc(meal.amountStr)}"></div>
-        </div>
-        <div class="sec-label">Who ate / shares meal?</div>
-        <div class="mj-chip-row">${splitChips}</div>`;
+        <div class="sec-label">Meal items</div>
+        ${mealCards}
+        <button class="btn btn-ghost btn-sm" id="mj-add-meal-item" type="button" style="width:auto;">Add item</button>`;
     } else {
       body = `
         <div class="mj-review-list">${mahjongWizardReview(g)}</div>
-        <div class="hint">Saving adds Mahjong transfers and, if included, one meal expense. The Balances and Settle tabs then calculate who owes who.</div>`;
+        <div class="hint">Saving adds Mahjong transfers and, if included, one meal expense per item. The Balances and Settle tabs then calculate who owes who.</div>`;
     }
 
     c.innerHTML = `
@@ -5637,17 +5713,44 @@
         renderMahjongWizard(g);
       });
     } else if (step !== finalStep) {
-      const meal = mjWizard.meal;
-      const payer = document.getElementById('mj-w-meal-payer');
-      if (payer) payer.value = meal.payer;
-      payer?.addEventListener('change', e=>{ meal.payer = e.target.value; });
-      document.getElementById('mj-w-meal-amt')?.addEventListener('input', e=>{ meal.amountStr = e.target.value; });
+      const meals = mahjongWizardMeals(g);
+      c.querySelectorAll('[data-mj-meal-payer]').forEach(sel=>{
+        const meal = meals[parseInt(sel.dataset.mjMealPayer,10)];
+        if (!meal) return;
+        sel.value = meal.payer;
+        sel.addEventListener('change', e=>{ meal.payer = e.target.value; });
+      });
+      c.querySelectorAll('[data-mj-meal-item]').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const meal = meals[parseInt(e.target.dataset.mjMealItem,10)];
+          if (meal) meal.item = e.target.value;
+        });
+      });
+      c.querySelectorAll('[data-mj-meal-amt]').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const meal = meals[parseInt(e.target.dataset.mjMealAmt,10)];
+          if (meal) meal.amountStr = e.target.value;
+        });
+      });
       c.querySelectorAll('[data-mj-meal-split]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
+          const meal = meals[parseInt(btn.dataset.mjMealIndex,10)];
+          if (!meal) return;
           const n = btn.dataset.mjMealSplit;
           meal.split = meal.split.includes(n) ? meal.split.filter(x=>x!==n) : [...meal.split,n];
           renderMahjongWizard(g);
         });
+      });
+      c.querySelectorAll('[data-mj-remove-meal]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          if (meals.length <= 1) return;
+          meals.splice(parseInt(btn.dataset.mjRemoveMeal,10), 1);
+          renderMahjongWizard(g);
+        });
+      });
+      document.getElementById('mj-add-meal-item')?.addEventListener('click', ()=>{
+        meals.push(defaultMahjongMeal(members));
+        renderMahjongWizard(g);
       });
     }
     document.getElementById('mj-w-back')?.addEventListener('click', ()=>{
@@ -5699,13 +5802,15 @@
     try {
       if (mjWizard.step === 0) {
         syncMahjongWizardPots(g);
-        if (mjWizard.meal.split.length === 0) mjWizard.meal.split = [...(g.members || [])];
       } else if (mjWizard.step <= mjWizard.potCount) {
         validateMahjongPot(g,mjWizard.pots[mjWizard.step-1], mjWizard.step-1);
       } else if (mjWizard.step !== mahjongWizardFinalStep()) {
-        if (!mjWizard.meal.payer) throw new Error('Pick who paid for the meal.');
-        if (!parseAmt(mjWizard.meal.amountStr || '')) throw new Error('Enter the meal amount.');
-        if (!mjWizard.meal.split.length) throw new Error('Pick at least one person to split the meal.');
+        mahjongWizardMeals(g).forEach((meal,index) => {
+          const label = meal.item || `meal item ${index+1}`;
+          if (!meal.payer) throw new Error(`Pick who paid for ${label}.`);
+          if (!parseAmt(meal.amountStr || '')) throw new Error(`Enter the price for ${label}.`);
+          if (!meal.split.length) throw new Error(`Pick at least one person sharing ${label}.`);
+        });
       } else {
         saveMahjongWizard(g);
         return;
@@ -5726,7 +5831,7 @@
       source: 'meal',
       category: 'Meal',
       categoryIcon: '🍽️',
-      description: 'Mahjong meal money',
+      description: meal.item ? `Mahjong meal: ${meal.item}` : 'Mahjong meal money',
       originalAmount,
       currency: ccy,
       cnyFen,
@@ -5765,7 +5870,7 @@
     try {
       const ccy = g.baseCurrency || DEFAULT_BASE_CURRENCY;
       const exps = mjWizard.pots.flatMap((pot,index) => createMahjongPotExpenses(g,pot,index,ccy));
-      if (mjWizard.includeMeal) exps.push(createMealExpense(g, mjWizard.meal));
+      if (mjWizard.includeMeal) exps.push(...mahjongWizardMeals(g).map(meal => createMealExpense(g, meal)));
       mjWizard.open = false;
       if (!exps.length) {
         renderMahjong(g);
@@ -5896,7 +6001,7 @@
 
   function bindShare(g) {
     document.querySelector('.js-online-publish')?.addEventListener('click', ()=>publishGroupOnline(g));
-    document.querySelector('.js-share')?.addEventListener('click', ()=>doShare(g.id));
+    document.querySelectorAll('.js-share').forEach(btn=>{ btn.onclick = ()=>doShare(g.id); });
     document.querySelector('.js-archive-group')?.addEventListener('click', ()=>setGroupArchived(g, groupState(g) !== 'past'));
     document.querySelectorAll('.js-role-toggle').forEach(btn=>{
       btn.addEventListener('click', ()=>setMemberRole(g, btn.dataset.userId, btn.dataset.nextRole));
