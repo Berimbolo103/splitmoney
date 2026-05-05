@@ -62,6 +62,7 @@ create table if not exists public.expenses (
   cny_fen integer not null,
   paid_by text not null,
   split_among jsonb not null default '[]'::jsonb,
+  split_shares jsonb,
   expense_date date,
   created_by_device text,
   created_by_user uuid references auth.users(id) on delete set null,
@@ -94,6 +95,7 @@ alter table public.trip_members add column if not exists responded_by uuid refer
 alter table public.members add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.expenses add column if not exists created_by_user uuid references auth.users(id) on delete set null;
 alter table public.expenses add column if not exists inputted_by text;
+alter table public.expenses add column if not exists split_shares jsonb;
 
 do $$
 begin
@@ -536,7 +538,7 @@ begin
   update public.members
   set claimed_by_user = auth.uid()
   where trip_id = v_trip.id
-    and lower(name) = lower(coalesce(nullif(trim(p_display_name), ''), 'Member'))
+    and lower(public.members.name) = lower(coalesce(nullif(trim(p_display_name), ''), 'Member'))
     and (claimed_by_user is null or claimed_by_user = auth.uid());
 
   return query
@@ -558,20 +560,95 @@ drop function if exists public.respond_trip_join_request(text, uuid, text);
 
 drop function if exists public.preview_trip_join_options(text);
 create or replace function public.preview_trip_join_options(p_share_code text)
-returns table (name text)
+returns table (name text, is_available boolean, claimed_by_user uuid)
 language sql
 security definer
 set search_path = public
 as $$
-  select m.name
+  select
+    m.name,
+    (m.claimed_by_user is null or m.claimed_by_user = auth.uid()) as is_available,
+    m.claimed_by_user
   from public.members m
   join public.trips t on t.id = m.trip_id
   where t.share_code = upper(trim(p_share_code))
-    and (m.claimed_by_user is null or m.claimed_by_user = auth.uid())
   order by m.created_at asc, m.name asc;
 $$;
 
 grant execute on function public.preview_trip_join_options(text) to authenticated;
+
+drop function if exists public.assign_trip_member_claim(text, uuid, text);
+create or replace function public.assign_trip_member_claim(
+  p_trip_id text,
+  p_user_id uuid,
+  p_member_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(trim(coalesce(p_member_name, '')), '');
+begin
+  if not public.is_trip_owner(p_trip_id) then
+    raise exception 'Only the owner can reassign accounts to member names';
+  end if;
+
+  if not exists (
+    select 1
+    from public.trip_members tm
+    where tm.trip_id = p_trip_id
+      and tm.user_id = p_user_id
+      and tm.status = 'approved'
+  ) then
+    raise exception 'That account has not joined this split';
+  end if;
+
+  update public.members
+  set claimed_by_user = null
+  where trip_id = p_trip_id
+    and claimed_by_user = p_user_id;
+
+  if v_name is null then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+    from public.members m
+    where m.trip_id = p_trip_id
+      and lower(m.name) = lower(v_name)
+  ) then
+    raise exception 'Pick one of the member names added by the owner';
+  end if;
+
+  update public.members
+  set claimed_by_user = null
+  where trip_id = p_trip_id
+    and lower(public.members.name) = lower(v_name)
+    and claimed_by_user is not null
+    and claimed_by_user <> p_user_id;
+
+  update public.members
+  set claimed_by_user = p_user_id
+  where trip_id = p_trip_id
+    and lower(public.members.name) = lower(v_name);
+
+  update public.trip_members
+  set display_name = (
+    select m.name
+    from public.members m
+    where m.trip_id = p_trip_id
+      and lower(m.name) = lower(v_name)
+    limit 1
+  )
+  where trip_id = p_trip_id
+    and user_id = p_user_id;
+end;
+$$;
+
+grant execute on function public.assign_trip_member_claim(text, uuid, text) to authenticated;
 
 drop function if exists public.set_trip_member_role(text, uuid, text);
 create or replace function public.set_trip_member_role(

@@ -428,6 +428,19 @@
       margin-top: 14px; padding: 12px; background: var(--green-light);
       border-radius: var(--r-sm); font-size: 14px; color: var(--green-dark); text-align: center;
     }
+    .split-member .share-input {
+      width: 92px;
+      min-height: 38px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: right;
+    }
+    .split-member .share-input:focus { outline: none; border-color: var(--green); }
 
     /* step 6: confirm */
     .confirm-body { padding-bottom: 16px; }
@@ -3265,6 +3278,21 @@
   const MAHJONG_EMOJIS = ['🀄','🎲','🏮','💰','🧧','♠️','♦️','♣️','♥️'];
   const CCYS = ['CNY','SGD','USD','MYR','HKD'];
   const SYM = { CNY:'¥', SGD:'S$', USD:'$', MYR:'RM', HKD:'HK$' };
+  const HOUSEMATE_CATS = [
+    { n:'Utilities', i:'💡' },
+    { n:'Electricity', i:'⚡' },
+    { n:'Water', i:'🚿' },
+    { n:'Internet', i:'🌐' },
+    { n:'Rent', i:'🏠' },
+    { n:'Groceries', i:'🛒' },
+    { n:'Household', i:'🧽' },
+    { n:'Subscription', i:'🔁' },
+    { n:'Repairs', i:'🔧' },
+    { n:'Cleaner', i:'🧹' },
+    { n:'Supplies', i:'📦' },
+    { n:'Food', i:'🍜' },
+    { n:'Other', i:'➕' },
+  ];
   const DEFAULT_BASE_CURRENCY = 'SGD';
   const MAIN_CURRENCY = 'SGD';
   const DEFAULT_FX_RATES = { SGD:5.40, USD:7.25, MYR:1.60, HKD:0.93 };
@@ -3302,7 +3330,7 @@
       label:'General Splitter',
       shortLabel:'General',
       homeTitle:'General Splits',
-      launcherDesc:'Split everyday shared costs, bills, meals, and group spending.',
+      launcherDesc:'Split utilities, rent, groceries, subscriptions, and housemate bills.',
       homeEmpty:'No general splits yet.',
       itemName:'general split',
       itemPlural:'general splits',
@@ -3317,7 +3345,7 @@
       activeTab:'Active',
       pastTab:'Past',
       expensesTab:'Expenses',
-      expenseEmpty:'No expenses yet. Tap + to add the first shared cost.',
+      expenseEmpty:'No bills yet. Tap + to add utilities, rent, groceries, or another shared household cost.',
       addLabel:'＋ Add expense',
     },
     mahjong: {
@@ -3371,16 +3399,18 @@
     Other:['Other expense'],
   };
   const GENERAL_SUGGESTS = {
-    Food:['Breakfast','Lunch','Dinner','Takeout'],
-    Drinks:['Coffee','Tea','Drinks','Bar tab'],
-    Bills:['Utilities','Electricity','Water','Internet'],
-    Groceries:['Supermarket','Household supplies','Snacks'],
-    Rent:['Rent','Deposit','Room share'],
-    Transport:['Fuel','Parking','Ride share','Bus fare'],
-    Shopping:['Household item','Shared purchase','Supplies'],
-    Subscription:['Streaming','Software','Membership'],
-    Medical:['Pharmacy','Clinic','Insurance'],
-    Gift:['Birthday gift','Farewell gift','Shared present'],
+    Utilities:['Monthly utilities','Utilities bill','Shared household bill'],
+    Electricity:['Electricity bill','SP electricity','Power bill'],
+    Water:['Water bill','Water usage','Utilities water'],
+    Internet:['Wi-Fi bill','Broadband','Router subscription'],
+    Rent:['Rent','Room share','Deposit'],
+    Groceries:['Supermarket','Shared groceries','Household groceries'],
+    Household:['Toilet paper','Cleaning supplies','Kitchen supplies'],
+    Subscription:['Streaming','Software','Shared membership'],
+    Repairs:['Plumbing repair','Aircon servicing','Light replacement'],
+    Cleaner:['Cleaner fee','House cleaning','Deep cleaning'],
+    Supplies:['Laundry supplies','Shared purchase','Home supplies'],
+    Food:['Takeout','Shared meal','Dinner at home'],
     Other:['Other cost'],
   };
 
@@ -3716,7 +3746,7 @@
   }
 
   function currentCategories() {
-    return currentApp === 'general' ? GENERAL_CATS : TRIP_CATS;
+    return currentApp === 'general' ? HOUSEMATE_CATS : TRIP_CATS;
   }
 
   function currentSuggests() {
@@ -3897,12 +3927,36 @@
     return out;
   }
 
+  function expenseShares(e) {
+    if (e?.splitShares && typeof e.splitShares === 'object') return e.splitShares;
+    return splitEvenly(e?.cnyFen || 0, e?.splitAmong || []);
+  }
+
+  function buildCustomShares(totalMinor, ccy, fx, members, fixedInputs={}) {
+    const selected = [...new Set(members || [])];
+    const fixedMinor = {};
+    selected.forEach(name => { fixedMinor[name] = parseAmt(fixedInputs[name] || ''); });
+    const flexible = selected.filter(name => !fixedMinor[name]);
+    const fixedTotalMinor = Object.values(fixedMinor).reduce((sum,v)=>sum+v,0);
+    if (fixedTotalMinor > totalMinor) throw new Error('The person-by-person amounts are more than the total bill.');
+    const remainingMinor = totalMinor - fixedTotalMinor;
+    if (remainingMinor > 0 && !flexible.length) throw new Error('The bill still has money left. Put 0 for at least one person to split the remaining amount.');
+    const remainderShares = splitEvenly(toCny(remainingMinor, ccy, fx), flexible);
+    const out = {};
+    selected.forEach(name => {
+      out[name] = toCny(fixedMinor[name] || 0, ccy, fx) + (remainderShares[name] || 0);
+    });
+    const delta = toCny(totalMinor, ccy, fx) - Object.values(out).reduce((sum,v)=>sum+v,0);
+    if (delta && selected.length) out[selected[0]] = (out[selected[0]] || 0) + delta;
+    return out;
+  }
+
   function balances(group) {
     const net = {};
     (group.members||[]).forEach(m => net[m]=0);
     activeExpenses(group).forEach(e => {
       net[e.paidBy] = (net[e.paidBy]||0) + e.cnyFen;
-      const shares = splitEvenly(e.cnyFen, e.splitAmong);
+      const shares = expenseShares(e);
       e.splitAmong.forEach(m => { net[m] = (net[m]||0) - (shares[m]||0); });
     });
     (group.payments||[]).forEach(p => {
@@ -4122,6 +4176,7 @@
       cny_fen: e.cnyFen,
       paid_by: e.paidBy,
       split_among: e.splitAmong || [],
+      split_shares: e.splitShares || null,
       expense_date: e.date || today(),
       created_by_device: e.createdByDevice || profile.id,
       created_by_user: e.createdByUser || authSession?.user?.id || null,
@@ -4142,6 +4197,7 @@
       cnyFen: r.cny_fen,
       paidBy: r.paid_by,
       splitAmong: Array.isArray(r.split_among) ? r.split_among : [],
+      splitShares: r.split_shares || null,
       date: r.expense_date || today(),
       createdByDevice: r.created_by_device,
       inputtedBy: r.inputted_by || null,
@@ -4183,7 +4239,7 @@
     const fromOwesRows = activeExpenses(g)
       .filter(e => e.paidBy === tx.to && e.splitAmong.includes(tx.from))
       .map(e => {
-        const shares = splitEvenly(e.cnyFen,e.splitAmong);
+        const shares = expenseShares(e);
         return {
           title: e.description || e.category || 'Expense',
           date: e.date || today(),
@@ -4196,7 +4252,7 @@
     const toOwesRows = activeExpenses(g)
       .filter(e => e.paidBy === tx.from && e.splitAmong.includes(tx.to))
       .map(e => {
-        const shares = splitEvenly(e.cnyFen,e.splitAmong);
+        const shares = expenseShares(e);
         return {
           title: e.description || e.category || 'Expense',
           date: e.date || today(),
@@ -4283,7 +4339,7 @@
     }
 
     activeExpenses(g).forEach(e => {
-      const shares = splitEvenly(e.cnyFen,e.splitAmong || []);
+      const shares = expenseShares(e);
       (e.splitAmong || []).forEach(name => {
         if (name !== e.paidBy) addDebt(name,e.paidBy,shares[name] || 0);
       });
@@ -5312,7 +5368,7 @@
         const n=e.splitAmong.length;
         const me=g.iAm;
         const myShare=me&&e.splitAmong.includes(me)
-          ? splitEvenly(e.cnyFen,e.splitAmong)[me]||0
+          ? expenseShares(e)[me]||0
           : 0;
         const splitLabel=e.splitAmong.length===g.members.length?'Everyone':e.splitAmong.join(', ');
         const title = e.description||e.category;
@@ -5348,11 +5404,12 @@
           save(); renderGroup(g); setTab('expenses');
         });
 
-        row.querySelector('.del-exp-btn').addEventListener('click', (ev)=>{
+        row.querySelector('.del-exp-btn').addEventListener('click', async (ev)=>{
           ev.stopPropagation();
           if (confirm(`Delete "${e.description||e.category}"?`)) {
             g.expenses=g.expenses.filter(x=>x.id!==e.id);
-            deleteExpenseOnline(g,e.id);
+            try { await deleteExpenseOnline(g,e.id); }
+            catch(err) { alert(`Could not delete this expense online:\n${err.message}`); }
             save(); renderGroup(g); setTab('expenses');
           }
         });
@@ -5403,11 +5460,12 @@
             patchExpenseArchiveOnline(g,e.id,null);
             save(); renderGroup(g); setTab('expenses');
           });
-          row.querySelector('.del-exp-btn').addEventListener('click', (ev)=>{
+          row.querySelector('.del-exp-btn').addEventListener('click', async (ev)=>{
             ev.stopPropagation();
             if (confirm(`Delete "${e.description||e.category}"?`)) {
               g.expenses=g.expenses.filter(x=>x.id!==e.id);
-              deleteExpenseOnline(g,e.id);
+              try { await deleteExpenseOnline(g,e.id); }
+              catch(err) { alert(`Could not delete this expense online:\n${err.message}`); }
               save(); renderGroup(g); setTab('expenses');
             }
           });
@@ -5451,12 +5509,13 @@
         </div>`;
     }).join('');
     c.querySelectorAll('.del-mj-exp').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         const exp = g.expenses.find(e=>e.id===btn.dataset.id);
         if (!exp) return;
         if (!confirm(`Delete "${exp.description || 'Mahjong entry'}"?`)) return;
         g.expenses = g.expenses.filter(e=>e.id!==exp.id);
-        deleteExpenseOnline(g, exp.id);
+        try { await deleteExpenseOnline(g, exp.id); }
+        catch(err) { alert(`Could not delete this expense online:\n${err.message}`); }
         save();
         renderGroup(g);
         setTab('expenses');
@@ -6030,12 +6089,13 @@
 
     document.getElementById('mj-start-wizard')?.addEventListener('click', ()=>startMahjongWizard(g));
     c.querySelectorAll('.del-mj-exp').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         const exp = g.expenses.find(e=>e.id===btn.dataset.id);
         if (!exp) return;
         if (!confirm(`Delete "${exp.description || 'Mahjong transfer'}"?`)) return;
         g.expenses = g.expenses.filter(e=>e.id!==exp.id);
-        deleteExpenseOnline(g, exp.id);
+        try { await deleteExpenseOnline(g, exp.id); }
+        catch(err) { alert(`Could not delete this expense online:\n${err.message}`); }
         save();
         renderGroup(g);
         setTab('mahjong');
@@ -6344,9 +6404,7 @@
       g.memberClaims = members || [];
       if ((members || []).length) g.members = members.map(m=>m.name).filter(Boolean);
 
-      const byId = new Map((g.expenses||[]).map(e=>[e.id,e]));
-      (expenses||[]).forEach(r=>byId.set(r.id, expenseFromRemote(r)));
-      g.expenses = [...byId.values()].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+      g.expenses = (expenses||[]).map(expenseFromRemote).sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
 
       const paymentsById = new Map((g.payments||[]).map(p=>[p.id,p]));
       (payments||[]).forEach(r=>paymentsById.set(r.id, paymentFromRemote(r)));
@@ -6540,12 +6598,12 @@
     }).catch(()=>{});
   }
 
-  function deleteExpenseOnline(g,expenseId) {
+  async function deleteExpenseOnline(g,expenseId) {
     if (!onlineReady() || !g.remoteTripId || !isSignedIn()) return;
-    db(`expenses?id=eq.${encodeURIComponent(expenseId)}`, {
+    await db(`expenses?trip_id=eq.${encodeURIComponent(g.remoteTripId)}&id=eq.${encodeURIComponent(expenseId)}`, {
       method:'DELETE',
       prefer:'return=minimal',
-    }).catch(()=>{});
+    });
   }
 
   function pushPaymentOnline(g,p) {
@@ -6946,7 +7004,7 @@
     { title:'What was it?',          sub:'Give it a name (optional)' },
     { title:'How much?',             sub:'Enter the total amount paid' },
     { title:'Who paid?',             sub:'Select the person who paid' },
-    { title:'Who is sharing?',       sub:'Select everyone splitting this expense' },
+    { title:'Who is sharing?',       sub:'Select people, or enter exact amounts for household bills' },
     { title:'Review & Confirm',      sub:'Check details before saving' },
   ];
 
@@ -6966,6 +7024,9 @@
         ccy:existing?.currency || g.baseCurrency || DEFAULT_BASE_CURRENCY,
         paidBy:existing?.paidBy || g.iAm || g.members[0] || null,
         split:existing?.splitAmong?.length ? [...existing.splitAmong] : [...g.members],
+        shareInputs: existing?.splitShares
+          ? Object.fromEntries(Object.entries(existing.splitShares).map(([name,cny]) => [name, ((fromCny(cny, existing.currency || g.baseCurrency || DEFAULT_BASE_CURRENCY, g.fxRates)||0)/100).toFixed(2).replace(/\.00$/,'')]))
+          : {},
         everyone:existing?.splitAmong?.length ? existing.splitAmong.length===g.members.length : true,
         date:existing?.date || today(),
       }
@@ -7127,6 +7188,7 @@
     const g=getGroup();
     if (!g) return;
     const minor=parseAmt(wiz.data.amtStr);
+    if (currentApp === 'general') return wizGeneralSplit(body,g,minor);
     const n=wiz.data.split.length;
     const perPerson=n>0?Math.round(minor/n):0;
 
@@ -7169,13 +7231,80 @@
     });
   }
 
+  function wizGeneralSplit(body,g,minor) {
+    const sym = SYM[wiz.data.ccy] || '$';
+    wiz.data.shareInputs = wiz.data.shareInputs || {};
+    const fixedTotal = (g.members || []).reduce((sum,name)=>sum+parseAmt(wiz.data.shareInputs[name] || ''),0);
+    const selected = [...new Set([...(wiz.data.split || []), ...(g.members || []).filter(name=>parseAmt(wiz.data.shareInputs[name] || '')>0)])];
+    wiz.data.split = selected;
+    const flexible = selected.filter(name=>!parseAmt(wiz.data.shareInputs[name] || ''));
+    const remaining = Math.max(0, minor - fixedTotal);
+    const over = fixedTotal > minor;
+    body.innerHTML=`
+      <div class="split-body">
+        <div class="split-hint" style="margin-top:0;margin-bottom:12px;text-align:left;">
+          Enter fixed amounts for people who owe a specific value. Put 0 or leave blank for people sharing the remaining ${sym}${(remaining/100).toFixed(2)}.
+        </div>
+        <div id="smembers"></div>
+        <div class="split-hint" id="split-hint" style="${over?'background:var(--red-light);color:var(--red);':''}">
+          ${over
+            ? `Fixed amounts exceed the bill by ${sym}${((fixedTotal-minor)/100).toFixed(2)}`
+            : `${sym}${(remaining/100).toFixed(2)} remaining · ${flexible.length} ${flexible.length===1?'person':'people'} sharing the rest`}
+        </div>
+      </div>`;
+    const mlist=document.getElementById('smembers');
+    g.members.forEach(name=>{
+      const row=document.createElement('div'); row.className='split-member';
+      const checked=wiz.data.split.includes(name);
+      row.appendChild(av(name,'av-sm'));
+      const nm=document.createElement('div');
+      nm.style.cssText='flex:1;font-size:15px;font-weight:600;min-width:0;';
+      nm.textContent=name;
+      const inp=document.createElement('input');
+      inp.className='share-input';
+      inp.inputMode='decimal';
+      inp.placeholder='0';
+      inp.value=wiz.data.shareInputs[name] || '';
+      const chk=document.createElement('div');
+      chk.className='chk'+(checked?' on':'');
+      chk.textContent=checked?'✓':'';
+      row.appendChild(nm); row.appendChild(inp); row.appendChild(chk);
+      chk.addEventListener('click', ()=>{
+        wiz.data.split = wiz.data.split.includes(name) ? wiz.data.split.filter(m=>m!==name) : [...wiz.data.split,name];
+        wiz.data.everyone=false;
+        wizGeneralSplit(body,g,minor);
+      });
+      row.addEventListener('click', ev=>{
+        if (ev.target === inp || ev.target === chk) return;
+        chk.click();
+      });
+      inp.addEventListener('input', ()=>{
+        wiz.data.shareInputs[name]=inp.value;
+        if (parseAmt(inp.value)>0 && !wiz.data.split.includes(name)) {
+          wiz.data.split.push(name);
+          chk.classList.add('on');
+          chk.textContent='✓';
+        }
+        wiz.data.everyone=false;
+      });
+      mlist.appendChild(row);
+    });
+  }
+
   function wizConfirm(body) {
     const g=getGroup();
     const minor=parseAmt(wiz.data.amtStr);
     const cnyFen=toCny(minor,wiz.data.ccy,g?.fxRates);
     const sym=SYM[wiz.data.ccy]||'¥';
     const splitLabel=wiz.data.split.length===(g?.members.length||0)?'Everyone':wiz.data.split.join(', ');
-    const shares=splitEvenly(cnyFen,wiz.data.split);
+    let shares={};
+    try {
+      shares = currentApp === 'general'
+        ? buildCustomShares(minor,wiz.data.ccy,g?.fxRates,wiz.data.split,wiz.data.shareInputs)
+        : splitEvenly(cnyFen,wiz.data.split);
+    } catch(e) {
+      shares = {};
+    }
     const inputMatchesDisplay = wiz.data.ccy === displayCurrency(g);
 
     const bdRows=wiz.data.split.map(name=>`
@@ -7236,7 +7365,17 @@
       }
     }
     if (s===4&&!wiz.data.paidBy) return;
-    if (s===5&&!wiz.data.split.length) { alert('Select at least one person to split with.'); return; }
+    if (s===5) {
+      if (!wiz.data.split.length) { alert('Select at least one person to split with.'); return; }
+      if (currentApp === 'general') {
+        try {
+          buildCustomShares(parseAmt(wiz.data.amtStr),wiz.data.ccy,getGroup()?.fxRates,wiz.data.split,wiz.data.shareInputs);
+        } catch(err) {
+          alert(err.message);
+          return;
+        }
+      }
+    }
     if (s===6) { doSaveExpense(); return; }
     wiz.step++;
     renderWizStep();
@@ -7249,6 +7388,15 @@
     if (!minor) return;
     const cnyFen=toCny(minor,wiz.data.ccy,g.fxRates);
     const existing = wiz.editId ? (g.expenses||[]).find(e=>e.id===wiz.editId) : null;
+    let splitShares = null;
+    if (currentApp === 'general') {
+      try {
+        splitShares = buildCustomShares(minor,wiz.data.ccy,g.fxRates,wiz.data.split,wiz.data.shareInputs);
+      } catch(err) {
+        alert(err.message);
+        return;
+      }
+    }
 
     const exp={
       id:existing?.id || uid(),
@@ -7260,6 +7408,7 @@
       cnyFen,
       paidBy:wiz.data.paidBy,
       splitAmong:[...wiz.data.split],
+      splitShares,
       date:wiz.data.date||today(),
       createdByDevice:existing?.createdByDevice || profile.id,
       createdByUser:existing?.createdByUser || authSession?.user?.id || null,
